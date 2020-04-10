@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+
+import sys, os, os.path, glob, shutil, subprocess, time
+import numpy as np
+
+import psrfits
+import pylab as plt
+
+
+
+
+#ARGOMENTI DA SHELL
+sample_number = 0
+flag_make_plots = 0
+flag_only_first_sample_per_subint = 0
+flag_total_intensity = 1
+tot_subints = 0
+flag_plot_set_ymax = 0
+
+list_what_plot = ['original_signal', 'recorded_signal']
+list_subint_range = []
+if (len(sys.argv) == 1):
+        print "USAGE: %s -fits \"<fitsfiles*.fits>\" [-makeplots] [-what {all,original_signal,recorded_signal}] -subint_range [min:max] [-tot_subints 100] [-set_ymax] -only_first_sample_per_subint" % (os.path.basename(sys.argv[0]))
+        exit()
+else:
+        for j in range(1, len(sys.argv)):
+                if (sys.argv[j] == "-fits"):
+                        string_fitsfiles = sys.argv[j+1]
+                        if ("*" in string_fitsfiles) or ("?" in string_fitsfiles):
+                                list_fitsfiles = sorted(glob.glob(string_fitsfiles.strip("\"")))
+                        else:
+                                list_fitsfiles = string_fitsfiles.split(",")
+
+                elif (sys.argv[j] == "-sample"):
+                        sample_number = int(sys.argv[j+1])
+
+                elif (sys.argv[j] == "-makeplots"):
+                        flag_make_plots = 1 
+                elif (sys.argv[j] == "-set_ymax"):
+                        flag_plot_set_ymax = 1 
+
+                        
+                elif (sys.argv[j] == "-only_first_sample_per_subint"):
+                        flag_only_first_sample_per_subint = 1 
+
+                elif (sys.argv[j] == "-subint_range"):
+                        list_subint_range = [int(x) for x in sys.argv[j+1].split(",")]
+                elif (sys.argv[j] == "-tot_subints"):
+                        tot_subints = int(sys.argv[j+1])
+
+
+                elif (sys.argv[j] == "-what"):
+                        str_what_plot = sys.argv[j+1] 
+                        if str_what_plot == 'original_signal' or str_what_plot == 'recorded_signal':
+                                list_what_plot = [str_what_plot]
+                                
+                        
+N_files = len(list_fitsfiles) 
+
+
+for i in range(N_files):
+        fits_filename = list_fitsfiles[i]
+        fits_file_nameonly = os.path.basename(fits_filename)
+        fits_file_basename = os.path.splitext(fits_file_nameonly)[0]
+        
+
+        pf = psrfits.PsrfitsFile(fits_filename)
+
+        nchan            = int(pf.nchan)
+        nbits            = pf.nbits
+        nsubints         = int(pf.nsubints)
+        nsamp_per_subint = int(pf.nsamp_per_subint)
+        nsamp_tot        = pf.nspec
+        Tobs_s           = pf.specinfo.T
+
+        print 
+        print "===================================================="
+        print "FILE: %s" % (fits_filename)
+        print "===================================================="
+        print
+
+        print "%30s: %-20d" % ("Number of bits", nbits)
+        print "%30s: %-20d" % ("Number of channels", nchan )
+        print "%30s: %-20d" % ("Number of subints", nsubints )
+        print "%30s: %-20d" % ("Number of samples", nsamp_tot )
+        print "%30s: %-20.2f" % ("Observation length (s)", Tobs_s )
+
+        
+        if list_subint_range == []:
+                if tot_subints == 0:
+                        list_subint_range = range(0, nsubints)
+                elif tot_subints > 0:
+                        list_subint_range = np.linspace(0, nsubints-1, tot_subints, dtype=int)
+                
+        if flag_only_first_sample_per_subint == 1:
+                list_samples = [0]
+        elif flag_only_first_sample_per_subint == 0:
+                list_samples = range(0, nsamp_per_subint)
+
+        if flag_make_plots == 1:
+                plots_dirname = "plots_%s" % (fits_file_nameonly)
+                if not os.path.exists("./%s" % plots_dirname):
+                        os.mkdir(plots_dirname)
+
+                for i_subint in list_subint_range:
+                        subint_with_scloffs    = pf.read_subint(i_subint, apply_weights=True,  apply_scales=True,  apply_offsets=True, apply_zero_off=True, total_intensity=True)
+                        subint_without_scloffs = pf.read_subint(i_subint, apply_weights=False, apply_scales=False, apply_offsets=False,apply_zero_off=False, total_intensity=True)
+
+                        max_power_yesscloffs = np.amax(subint_with_scloffs)
+                        min_power_yesscloffs = np.amin(subint_with_scloffs)
+
+                        max_power_noscloffs = np.amax(subint_without_scloffs)
+                        min_power_noscloffs = np.amin(subint_without_scloffs)
+                        
+                        subint_saved = subint_without_scloffs   #These is the "raw" signal, as actually "observed"
+                        subint_raw   = subint_with_scloffs      #These are the data that were actually saved on file
+                        
+                        subint_scales_AA   = pf.get_scales(i_subint)[:nchan]
+                        subint_scales_BB   = pf.get_scales(i_subint)[nchan:2*nchan]
+                        subint_offsets_AA  = pf.get_offsets(i_subint)[:nchan]
+                        subint_offsets_BB  = pf.get_offsets(i_subint)[nchan:2*nchan]
+                        
+                        for k_samp in list_samples:
+                                spectrum_original = subint_with_scloffs[k_samp]
+                                spectrum_recorded = subint_without_scloffs[k_samp]
+
+                                print "Making plot for subint %04d - sample %04d" % (i_subint, k_samp)
+                                if 'original_signal' in list_what_plot:
+                                        plt.clf()
+                                        
+                                        if flag_plot_set_ymax == 1:
+                                                #plt.ylim([min_power_yesscloffs, max_power_yesscloffs])
+                                                plt.ylim([0, 300])
+                                        plt.plot(spectrum_original)
+                                        plt.hlines(255, 0, nchan, linestyles='dashed')
+                                        plt.savefig("%s/plot_original_yesscloffs_%s_sub%05d_spec%04d.png" % (plots_dirname,fits_file_basename, i_subint, k_samp))
+                                        
+                                if 'recorded_signal' in list_what_plot:
+                                        plt.clf()
+                                        if flag_plot_set_ymax == 1:
+                                                #plt.ylim([min_p<ower_noscloffs, max_power_noscloffs])
+ 
+                                                plt.ylim([0, 300])
+                                        plt.hlines(255, 0, nchan, linestyles='dashed')
+                                        plt.plot(spectrum_recorded)
+                                        plt.savefig("%s/plot_recorded_noscloffs_%s_sub%05d_spec%04d.png" % (plots_dirname, fits_file_basename, i_subint, k_samp))
+                                        

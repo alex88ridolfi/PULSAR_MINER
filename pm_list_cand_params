@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+
+import sys, os, os.path, glob, shutil, subprocess, time
+import numpy as np
+
+LIGHT_SPEED = 2.99792458e10                 #Speed of Light in cgs
+
+def calculate_acceleration_in_cm_s2_from_F0_and_F1(P0_s, Pdot):
+
+        acc_cm_s2 = LIGHT_SPEED * Pdot/P0_s
+        
+        return acc_cm_s2
+
+
+def import_bestprof( infile ):
+        file_bestprof = open( infile, "r" )
+
+        dict_bestprof = {}
+
+	for line in file_bestprof:
+                if line.startswith("# "):
+                        split_line = [ x.strip() for x in line[2:].split("=") ]
+
+                        if (split_line[0] == "P_topo (ms)") or (split_line[0] == "P_bary (ms)"):
+                            split_line[1] = np.float64(split_line[1].split("+/-")[0].strip())
+                            
+                        try:
+                                dict_bestprof[ split_line[0] ] = split_line[1]
+			except:
+                                pass
+                        
+        return dict_bestprof
+
+
+
+#ARGOMENTI DA SHELL
+flag_use_tabs =	0
+if (len(sys.argv) == 1):
+        print "USAGE: %s -bestprof \"GOOD*.bestprof\" -tab_spacing " % (os.path.basename(sys.argv[0]))
+        exit()
+else:
+        for j in range(1, len(sys.argv)):
+                if (sys.argv[j] == "-bestprof"):
+                        string_bestprof = sys.argv[j+1]
+                        if ("*" in string_bestprof) or ("?" in string_bestprof):
+                                list_bestprof = sorted(glob.glob(string_bestprof.strip("\"")))
+                        else:
+                                list_bestprof = string_bestprof.split(",")
+
+                elif (sys.argv[j] == "-tab_spacing"):
+                        flag_use_tabs = 1
+
+N_bestprof = len(list_bestprof) 
+
+
+
+print "%90s %20s %14s %15s %15s %10s %12s"   % ("File name", "P_bary (ms)", "P_dot", "DM (pc cm-3)", "Acc (m/s^2)", "zmax", "Length (s)")
+for k in range(N_bestprof):
+
+        bestprof_filename = list_bestprof[k]
+        dict_bestprof = import_bestprof(bestprof_filename)
+        
+        P_bary_ms = np.float(dict_bestprof['P_bary (ms)'])
+        P_dot = np.float(dict_bestprof["P'_bary (s/s)"].split("+/-")[0])
+        nsamples = int(dict_bestprof["Data Folded"])
+        T_sample = np.float((dict_bestprof["T_sample"]))
+
+        chunk_length_s = nsamples*T_sample
+        
+        DM = np.float(dict_bestprof['Best DM'])
+        
+
+        zmax = int(bestprof_filename.split("_z")[-1].split("_")[0])
+        accel_ms2 = calculate_acceleration_in_cm_s2_from_F0_and_F1(P_bary_ms / 1000, P_dot)/100.
+        if flag_use_tabs == 1:
+                print "%-90s %20.15f %14.5e %15.3f %15.3f %10d %12d"   % (bestprof_filename, P_bary_ms, P_dot, DM, accel_ms2, zmax, chunk_length_s)
+        else:
+                print "%s %.15f %.5e %.3f %.3f %d %d"   % (bestprof_filename, P_bary_ms, P_dot, DM, accel_ms2, zmax, chunk_length_s)
+
+
+
+
+        

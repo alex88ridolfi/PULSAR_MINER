@@ -1,0 +1,99 @@
+#!/usr/bin/env python
+
+import sys, os, os.path, glob, shutil
+import numpy as np
+
+import astrophysical_constants_cgs as astro_const
+import alex_search
+import alex_processes
+import alex_folding
+
+
+def check_if_already_known(P_cand_ms, numharm):
+
+        #Loop over all the known periods of the pulsars in the cluster
+        print
+        print "*****************************************+++++"
+        P = P_cand_ms
+
+        print "P_cand_ms = %.7f " % (P)
+
+
+        
+        print "Cheking harmonics...."
+        print
+        #Harmonics
+        for nh in range(2, numharm + 1):
+            for n in range(1,16):
+            
+                P_ms_nh = n*P/nh
+                
+                print "nh = %d/%d  --> = %.10f " % (n,nh, P_ms_nh)
+
+                
+                
+        for ns in range(2, numharm + 1):
+            for n in range(1,16):
+                P_ms_ns = P *ns / n
+                print "nh = %d/%d  --> = %.10f " % (n, ns, P_ms_ns)
+
+
+     
+
+
+
+numharm = 16
+flag_foldall = 0
+string_nosearch = ""
+#ARGOMENTI DA SHELL
+if (len(sys.argv) == 1):
+        print "USAGE: %s -cand [Pms] " % (os.path.basename(sys.argv[0]))
+        exit()
+else:
+        for j in range( 1, len(sys.argv)):
+                if (sys.argv[j] == "-cand"):
+                        list_P_cand_ms = np.array( [np.float(x) for x in sys.argv[j+1].split(",")])
+                        print "list_P_cand_ms = ", list_P_cand_ms
+
+for i in range(len(list_P_cand_ms)):
+    P_cand_ms = list_P_cand_ms[i]
+
+    print
+    print "*******************************************************************************************"
+    print "                     P_cand_ms = %.6f " % (P_cand_ms)
+    print "*******************************************************************************************"
+    
+    check_if_already_known(P_cand_ms, numharm)
+            
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

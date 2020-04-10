@@ -1,0 +1,237 @@
+#!/usr/bin/env python
+
+import sys, os, os.path, glob, shutil
+import numpy as np
+
+import astrophysical_constants_cgs as astro_const
+
+
+def flux_with_radiometer_equation( SNR, beta, Tsys, G, npol, t_obs, bw, W_eff_s, WP_s, flag_verbose_mode=False, errors=(0,0,0) ):
+    """
+    SNR:     Signal-to-noise ratio
+    beta:    Digitization error
+    t_obs:   Integration time [s]
+    npol:    # of polarizations
+    G:       Gain [K/Jy]
+    bw:      Bandwidth [MHz]
+    W_eff_s: Effective pulse_width
+    P_s:     Pulsar Period [s] 
+    errors:  Errors for variables (SNR, Tsys, G)                                                                                                                            
+    """
+
+    #print "flux_with_radiometer_equation:: W_eff_s  = ", W_eff_s
+    #print "flux_with_radiometer_equation:: P_s      = ", P_s
+
+    
+    
+
+    #S_mean_mJy = ( (SNR * beta * Tsys) / (G * np.sqrt(npol * t_obs * bw) ) )  * np.sqrt( W_frac*P_s / ( P_s - W_frac*P_s))   # With duty cycle
+    
+    S_mean_mJy = ( (SNR * beta * Tsys) / (G * np.sqrt(npol * t_obs * bw) ) )  * np.sqrt( W_eff_s / ( P_s - W_eff_s)  )                 # Directly with effective pulse width
+
+    #print "flux_with_radiometer_equation:: (G * np.sqrt(npol * t_obs * bw) ) ) = %.8f" % (G * np.sqrt(npol * t_obs * bw) )
+    #print "flux_with_radiometer_equation:: np.sqrt(W_eff_s / ( P_s - W_eff_s) ) = %.8f" % np.sqrt( W_eff_s / ( P_s - W_eff_s)  )
+    #print "flux_with_radiometer_equation:: S_mean_mJy = ", S_mean_mJy
+    
+    if flag_verbose_mode==True:
+            #print "S_mean [mJy] = ( (%.2f * %.2f * %.2f K) / (%.1f K/Jy * sqrt( %d * %.1f s * %.2f MHz) ) )  * sqrt( %.2f * %.4f s / ( %.4f s - %.2f * %.4f s))  =  %.4f mJy" % (SNR, beta, Tsys, G, npol, t_obs, bw, W_frac, P_s, P_s , W_frac, P_s, S_mean_mJy)
+            print
+
+    if errors != (0,0,0):
+        delta_SNR = errors[0]
+        delta_Tsys = errors[1]
+        delta_G = errors[2]
+
+        #"Here f is the function S_mean_mJy"                                                                                                                                                                                                                                 
+        df_dSNR   =  ( (      beta * Tsys) / (            G * np.sqrt(npol * t_obs * bw) ) )  * np.sqrt( W_frac*P_s / ( P_s - W_frac*P_s))
+        df_dTsys  =  ( (SNR * beta       ) / (            G * np.sqrt(npol * t_obs * bw) ) )  * np.sqrt( W_frac*P_s / ( P_s - W_frac*P_s))
+        df_dG     = -( (SNR * beta * Tsys) / (np.power(G,2) * np.sqrt(npol * t_obs * bw) ) )  * np.sqrt( W_frac*P_s / ( P_s - W_frac*P_s))
+
+        S_mean_mJy_Err = np.sqrt(  np.power(df_dSNR * delta_SNR, 2)        +      np.power(df_dTsys * delta_Tsys, 2)       +      np.power(df_dG * delta_G, 2) )
+
+        return S_mean_mJy, S_mean_mJy_Err
+    else:
+        return S_mean_mJy
+
+
+
+
+def calculate_effective_pulse_width_Weff_s(W_int_s, t_samp_s, DM_pccm3, fc_MHz, bw_chan_MHz, flag_ignore_scattering):
+	"""    
+        From Eq. 2.3 of Barr (2013, PhD thesis, page 39)
+        W_eff = sqrt(W_int**2 + Dt_scatter**2 + Dt_dispersion**2 + Dt_samp**2 )
+        """
+
+        fc_GHz = fc_MHz	/ 1000.
+        if flag_ignore_scattering == 0:
+	        Dt_scatter_s = calculate_scattering_timescale_tau_s( DM_pccm3, fc_GHz )
+        else:
+                Dt_scatter_s = 0
+        Dt_channel_dispersion_s = calculate_intrachannel_delay( fc_MHz, bw_chan_MHz, DM_pccm3)
+
+
+        #print "calculate_effective_pulse_width_Weff_s:: W_int_s                   = %.8f" % (W_int_s)
+        #print "calculate_effective_pulse_width_Weff_s:: Dt_scatter_s              = %.8f" % (Dt_scatter_s)
+        #print "calculate_effective_pulse_width_Weff_s:: Dt_channel_dispersion_s   = %.8f" % (Dt_channel_dispersion_s)
+        #print "calculate_effective_pulse_width_Weff_s:: t_samp_s                  = %.8f" % (t_samp_s)
+        
+	W_eff_s = np.sqrt( W_int_s**2  + Dt_scatter_s**2 + Dt_channel_dispersion_s**2  + t_samp_s**2)
+
+	return W_eff_s
+
+
+def calculate_intrachannel_delay( fc_MHz, bw_chan_MHz, DM):
+        """
+        Returns the intrachannel delay in s inside a channel of bandwidth bw_chan due to a wrong dispersion measure
+        fc_MHz:         [MHz]
+        bw_chan_MHz:    [MHz]
+        DM:             [pc cm-3]
+        dt_s = 8.3e3 * DM * (bw_chan_MHz / np.power(fc_MHz, 3.) )    Lorimer & Kramer (2004) - Appendix A2.4
+        """
+
+        dt_s = 8.3e3 * DM * (bw_chan_MHz / np.power(fc_MHz, 3.) )
+
+        return dt_s
+
+def calculate_scattering_timescale_tau_s( DM_pccm3, f_GHz ):
+        """
+        Returns the scattering timescale in ms
+        Uses formula (4.42) of the Handbook
+
+        DM: [pc cm-3]
+        f:      GHz
+        """
+
+        log_10_tau_s = -6.46 + 0.154*np.log10( DM_pccm3 ) + 1.07* np.power( np.log10(DM_pccm3), 2  )   -  3.86*np.log10(f_GHz)
+        tau_scattering_ms = np.power(10, log_10_tau_s)
+
+        return tau_scattering_ms
+
+
+
+flag_ignore_scattering = 0
+outfile_name = ""
+if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
+        print "USAGE: %s [-ignore_scattering] -SNR 10 -beta 1.16 -Tsys 30 -G 0.67 -npol 2 -Tobs_s 5400 -dt_s 100e-6 -bw_MHz 1000 -duty 0.1 -DM 500 -fc_MHz 6913 -nchan 512 -P_range_s \"0.001,10\" [-o sensitivity_curve.txt]" % (os.path.basename(sys.argv[0]))
+        print
+        #print "%10s    %-47s:  %-50s" % ("-SNR", "", "Print help")
+        #print "%10s    %-47s:  %-50s %s" % ("-par", "<parfile>", "TEMPO1 parfile", "")
+        #print "%10s    %-47s:  %-50s %s" % ("-datfiles", "<file1.dat>,...,<fileN.dat>", "PRESTO TOPOCENTRIC time series (.dat)", "")
+        #print "%10s    %-47s:  %-50s" % ("-fine", "", "Double the number of steps (for faint/narrow pulsar)")
+        #print "%10s    %-47s:  %-50s" % ("-nsteps", "[integer]  [default: Eq.(5) of Ridolfi+2016]", "Manually set the number of T0 trials")
+        #print "%10s    %-47s:  %-50s" % ("-orboffset", "\"-0.1,0.1\"  [default: \"-0.5,0.5\"]", "Orbital phase offset from nominal T0 to search")
+	#print "%10s    %-47s:  %-50s" % ("-ncpus", "[integer]  [default: 1]", "Number of cpus to use")
+        #print "%10s    %-47s:  %-50s" % ("-keep_best", "[integer]  [default: all]", "Number of best detections to retain")
+        #print "%10s    %-47s:  %-50s" % ("-D", "", "Show live chisquare vs orbital offset plot")
+        #print "%10s    %-47s:  %-50s" % ("-Q", "", "Quiet mode - do not print anything")
+        #print "%10s    %-47s:  %-50s" % ("-V", "", "Very verbose mode - print many info to debug issues")
+        #print "%10s    %-47s:  %-50s" % ("-version", "", "Print the version of this code")
+        exit()
+elif (("-version" in sys.argv) or ("--version" in sys.argv)):
+        print "Version: %s" % (string_version)
+	exit()
+else:
+        for j in range( 1, len(sys.argv)):
+	        if (sys.argv[j] == "-SNR"):
+                        SNR = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-beta"):
+                        beta = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-Tsys"):
+                        Tsys_K = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-G"):
+                        G_K_Jy = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-npol"):
+                        npol = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-Tobs_s"):
+                        t_obs_s = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-dt_s"):
+                        dt_s = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-bw_MHz"):
+                        bw_MHz = np.float(sys.argv[j+1])
+	        elif (sys.argv[j] == "-duty"):
+                        duty_frac = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-DM"):
+                        DM_pccm3 = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-fc_MHz"):
+                        fc_MHz = np.float(sys.argv[j+1])
+                elif (sys.argv[j] == "-nchan"):
+                        nchan = int(sys.argv[j+1])
+                elif (sys.argv[j] == "-ignore_scattering"):
+                        flag_ignore_scattering = 1
+	        elif (sys.argv[j] == "-P_range_s"):
+                        P_min_s_exponent, P_max_s_exponent = [np.log10(np.float(x)) for x in sys.argv[j+1].split(",")]
+	        elif (sys.argv[j] == "-o"):
+                        outfile_name = sys.argv[j+1]
+
+                        
+#array_P_s = np.linspace(P_min_s, P_max_s, 100.)
+array_P_s = np.logspace(P_min_s_exponent, P_max_s_exponent, 100.)
+print
+print "Survey parameters:"
+print
+print "%24s = %.3f" % ("SNR", SNR)
+print "%24s = %d" % ("Npol", npol)
+print "%24s = %.2f" % ("Tsys (K)", Tsys_K)
+print "%24s = %.2f" % ("BW (MHz)", bw_MHz)
+print "%24s = %.2f" % ("DM (pc cm-3)", DM_pccm3)
+print "%24s = %.4f" % ("Gain (K/Jy)", G_K_Jy)
+print "%24s = %.2f" % ("Correction factor", beta)
+print "%24s = %.7f" % ("Sampling time (s)", dt_s)
+print "%24s = %.2f" % ("Tobs (s)", t_obs_s)
+print "%24s = %.2f" % ("Duty cycle (fraction)", duty_frac)
+print
+#exit()
+
+string_header = "%20s %20s %23s %23s %20s" % ("Period (s)", "Duty (frac)", "Intr. Pulse Width (s)", "Eff. Pulse Width (s)", "Smean_min (mJy)" )        
+print string_header
+if outfile_name != "":
+        outfile = open(outfile_name, "w")
+        outfile.write("%s\n" % string_header)
+
+
+for n in range(len(array_P_s)):
+        P_s = array_P_s[n]
+        #print
+        #print
+        #print "**** P_s = %.8f " % (P_s)
+
+        W_int_s = P_s * duty_frac
+        t_samp_s = dt_s
+        bw_chan_MHz = bw_MHz / nchan
+
+
+        W_eff_s = calculate_effective_pulse_width_Weff_s(W_int_s, t_samp_s, DM_pccm3, fc_MHz, bw_chan_MHz, flag_ignore_scattering)
+
+        #print "W_eff_s = %.2f" % W_eff_s
+        
+        S_mean_min_mJy = flux_with_radiometer_equation( SNR, beta, Tsys_K, G_K_Jy, npol, t_obs_s, bw_MHz, W_eff_s, P_s, flag_verbose_mode=False, errors=(0,0,0) )
+        #print "S_mean_min = ", S_mean_min
+
+        string_values = "%20.7f %20.3f %23.7f %23.7f %20.6f" % (P_s, duty_frac, W_int_s, W_eff_s, S_mean_min_mJy)
+        print string_values
+        if outfile_name	!= "":
+                outfile.write("%s\n" % string_values)
+
+        
+
+if outfile_name	!= "":
+        outfile.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

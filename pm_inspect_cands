@@ -1,0 +1,424 @@
+#!/usr/bin/env python
+
+import sys, os, os.path, glob, subprocess
+import numpy as np
+
+LIGHT_SPEED = 2.99792458e10                 #Speed of Light in cgs
+BOLD = '\033[1m'
+END = '\033[0m'
+
+
+def import_parfile( infile ):
+        parfile = open( infile, "r" )
+        dict_parfile = {}
+        for line in parfile:
+                if line != "\n":
+			split_line = line.split()
+                        dict_parfile[ split_line[0] ] = split_line[1]
+                        if "D-" in dict_parfile[ split_line[0] ]:
+                                dict_parfile[ split_line[0] ] = dict_parfile[ split_line[0] ].replace("D-", "e-")
+
+        return dict_parfile
+
+def import_bestprof( infile ):
+        file_bestprof = open( infile, "r" )
+
+        dict_bestprof = {}
+
+	for line in file_bestprof:
+                if line.startswith("# "):
+                        split_line = [ x.strip() for x in line[2:].split("=") ]
+
+                        if (split_line[0] == "P_topo (ms)") or (split_line[0] == "P_bary (ms)"):
+                            split_line[1] = np.float64(split_line[1].split("+/-")[0].strip())
+                            
+                        try:
+                                dict_bestprof[ split_line[0] ] = split_line[1]
+			except:
+                                pass
+                        
+        return dict_bestprof
+
+
+
+def ask_for_operation():
+        print "SELECT OPERATION:"
+        print "  %-20s -> Mark candidate as GOOD" % ("g")
+        print "  %-20s -> Unmark candidate as GOOD" % ("x")
+        print "  %-20s -> Mark candidate as REDETECTION" % ("r")
+        print "  %-20s -> Unmark candidate as REDETECTION" % ("u")
+        print "  %-20s -> Go to candidate N" % ("c N")
+        print "  %-20s -> Go to previous candidate" % ("b")
+        print "  %-20s -> Go to next candidate" % ("n")
+        print "  %-20s -> List known pulsar/periods" % ("l")
+        print "  %-20s -> I am done!" % ("done")
+        print
+        string_operation = raw_input("Operation: ")
+        return string_operation
+
+
+def show_known_pulsars(list_names, list_periods_ms, list_doppler_factors):
+        print
+        print
+        print "KNOWN PULSARS"
+        for i in range(len(list_periods_ms)):
+                if list_Pb_s[i] == 0:
+                        string_type = "isolated"
+                elif list_Pb_s[i] > 0:
+                        string_type = "binary"
+                        
+                P = list_periods_ms[i]
+                P_ms_min = P * (1 - list_doppler_factors[i]) - 1.0e-4  #Accounts for covariances with Pdot
+                P_ms_max = P * (1 + list_doppler_factors[i]) + 1.0e-4  #Accounts for covariances with Pdot
+
+                print "PSR %12s (%-8s):      %.15f < P (ms) < %.15f" % (list_names[i], string_type, P_ms_min, P_ms_max)
+
+
+
+
+def check_if_already_known(P_cand_ms, list_known_periods, list_doppler_factors, list_names, numharm, zaplist):
+
+    #Loop over all the known periods of the pulsars in the cluster
+    for i in range(len(list_known_periods)):
+        psrname = list_names[i]
+        #print
+        #print "*****************************************"
+        #print "check_if_already_known: i=%2d/%d (pulsar %s - P = %.10f ms)" % (i+1, len(list_known_periods), list_names[i], list_known_periods[i])
+
+
+        P = list_known_periods[i]
+        P_ms_min = P * (1 - list_doppler_factors[i]) - 1.0e-4
+        P_ms_max = P * (1 + list_doppler_factors[i]) + 1.0e-4
+
+        #print "P_ms min - max (due to Doppler shift): %.10f - %.10f ms" % (P_ms_min, P_ms_max)
+
+
+        if (P_cand_ms > P_ms_min) and (P_cand_ms < P_ms_max):
+            print "%sP_min = %.6f ms < %.6f < %.6f ms = P_max    --> ALREADY KNOWN: PSR %s !!%s" % (BOLD, P_ms_min, P_cand_ms, P_ms_max, list_names[i], END)
+            return True
+
+        else:
+            #print "Cheking harmonics...."
+            #Harmonics
+            for nh in range(1, numharm + 1):
+                for n in range(1,16+1):
+                    #print "nh = %d   | n = %d" % (nh, n)
+                    P_known_ms_nh_min = P_ms_min * (np.float(n)/ nh)
+                    P_known_ms_nh_max = P_ms_max * (np.float(n)/ nh)
+                
+                    #print "nh = %d/%d  --> Pulsar %s has a period = %.10f - %.10f " % (nh, n, psrname, P_known_ms_nh_min, P_known_ms_nh_max)
+
+                    if (P_cand_ms >= P_known_ms_nh_min) and (P_cand_ms <= P_known_ms_nh_max):
+                        print
+                        print "%sARGH! Candidate with P = %.10f ms is the %d-th harmonic of pulsar %s (P = %.10f ms)%s" % (BOLD, P_cand_ms, nh, list_names[i], list_known_periods[i], END)
+                        print
+                        return True
+
+                
+            #print "----------------- SUBHARMONICS ----"
+            for ns in range(2, numharm + 1):
+                for n in range(1,16+1):
+                    P_known_ms_ns_min = P_ms_min * (np.float(ns) / n)
+                    P_known_ms_ns_max = P_ms_max * (np.float(ns) / n)
+                    #print "ns = %d/%d  --> Pulsar %s has a period = %.10f - %.10f " % (n,ns, psrname, P_known_ms_ns_min, P_known_ms_ns_max)
+
+                    if (P_cand_ms >= P_known_ms_ns_min) and (P_cand_ms <= P_known_ms_ns_max):
+                        print
+                        print "%sARGH! Candidate with P = %.10f ms is the %d-th subharmonic of pulsar %s (P = %.10f ms%s)" % (BOLD, P_cand_ms, ns, list_names[i], list_known_periods[i], END)
+                        return True
+
+
+    for i in range(len(zaplist)):
+        P = zaplist[i]
+        if (P_cand_ms > P*0.98) and (P_cand_ms < P*1.02):
+             return "ZAPPED"
+    return False
+     
+
+numharm = 8
+zaplist = np.zeros(1)
+flag_use_evince = 0
+flag_flag_redetections = 0
+DM_range = [1.0,10000.0]
+
+#ARGOMENTI DA SHELL
+if (len(sys.argv) == 1):
+        print "USAGE: %s -known_pulsars \"<known_pulsars*.par>\" -bestprof \"raw*.bestprof\" [-flag_redetections] [-numharm 8] [-evince] [-DM_range \"1,10000\"]" % (os.path.basename(sys.argv[0]))
+        exit()
+else:
+        for j in range(1, len(sys.argv)):
+                if (sys.argv[j] == "-known_pulsars"):
+                        string_parfiles = sys.argv[j+1]
+                        if ("*" in string_parfiles) or ("?" in string_parfiles):
+                                print string_parfiles.strip("\"")
+                                list_parfiles = sorted(glob.glob(string_parfiles.strip("\"")))
+                        else:
+                                list_parfiles = string_parfiles.split(",")
+
+                if (sys.argv[j] == "-bestprof"):
+                        string_bestprof = sys.argv[j+1]
+                        if ("*" in string_bestprof) or ("?" in string_bestprof):
+                                print string_bestprof.strip("\"")
+                                list_bestprof = sorted(glob.glob(string_bestprof.strip("\"")))
+                        else:
+                                list_bestprof = string_bestprof.split(",")
+
+                elif (sys.argv[j] == "-numharm"):
+                        numharm = int(sys.argv[j+1])
+                elif (sys.argv[j] == "-evince"):
+                        flag_use_evince = 1
+
+                elif (sys.argv[j] == "-flag_redetections"):
+                        flag_flag_redetections = 1
+                elif (sys.argv[j] == "-DM_range"):
+                        DM_range = [np.float(x) for x in sys.argv[j+1].strip().split(",")]
+
+
+                        
+N_parfiles = len(list_parfiles)
+N_bestprof = len(list_bestprof) 
+
+list_periods_ms      = np.zeros(N_parfiles)
+list_names           = [""]*N_parfiles 
+list_Pb_s            = np.zeros(N_parfiles)
+list_as              = np.zeros(N_parfiles)
+
+for i in range(N_parfiles):
+    parfile_name = list_parfiles[i]
+
+    dict_parfile_pulsar = import_parfile(parfile_name)
+
+    try:               psrname = dict_parfile_pulsar['PSRJ']
+    except KeyError:   psrname = dict_parfile_pulsar['PSR']
+    list_names[i] = psrname
+
+    try:
+        P_s = 1./np.float64(dict_parfile_pulsar['F0'])
+    except:
+        P_s = np.float64(dict_parfile_pulsar['P0'])
+        
+    P_ms = P_s * 1.0e3
+    list_periods_ms[i]       = P_ms
+    
+    print "%d / %d) '%s' PSR: %s   --> P (ms) = %.9f" % (i, N_parfiles, parfile_name, psrname, P_ms)
+
+    
+    if "BINARY" in dict_parfile_pulsar.keys():
+        print "It's a binary!"
+        try:
+            Pb_d = np.float64(dict_parfile_pulsar['PB'])
+	    Pb_s = Pb_d*86400.
+        except KeyError:
+            string_Fb0 = dict_parfile_pulsar['FB0']
+            Fb0 = np.float64(string_Fb0)
+            Pb_s = (1./Fb0)
+	    Pb_d = Pb_s/86400.
+
+        x_p_lts = np.float64(dict_parfile_pulsar['A1'])
+        
+        try:
+                omega_p_rad = np.float64(dict_parfile_pulsar['OM']) * np.pi/180
+        except:
+                pass
+                
+        try:               ecc = np.float64(dict_parfile_pulsar['E'])
+        except:
+                try:
+                        ecc = np.float64(dict_parfile_pulsar['ECC'])
+                except:
+                        pass
+        
+        try:              T0_parfile = np.float64(dict_parfile_pulsar['T0'])
+        except KeyError:  T0_parfile = np.float64(dict_parfile_pulsar['TASC']); key_T0 = "TASC"
+
+        list_Pb_s[i]             = Pb_s
+        list_as[i]               = LIGHT_SPEED * x_p_lts
+
+        
+    else:
+        list_Pb_s[i]             = 0
+        list_as[i]               = 0
+
+print "list_Pb_s = ", list_Pb_s
+print "list_as   = ", list_as
+
+    
+list_v_maxs = (2*np.pi * list_as/list_Pb_s)  
+list_doppler_factors = (list_v_maxs/LIGHT_SPEED)
+list_doppler_factors = [x if not np.isnan(x) else 1e-4 for x in list_doppler_factors]
+
+print
+print
+print
+print "list_v_maxs = ", list_v_maxs
+print "list_doppler_factors = ", list_doppler_factors    
+
+
+list_dict_candidates = []
+list_dict_candidates_sorted = []
+
+
+
+wrong_DM_candidates = 0
+# BUILD LIST OF CANDIDATES FROM .bestprof FILES
+for k in range(N_bestprof):
+    bestprof_filename = list_bestprof[k]
+    
+
+    dict_bestprof_raw = import_bestprof(bestprof_filename)
+    
+    dict_bestprof = {'chi': np.float64(dict_bestprof_raw['Reduced chi-sqr']),
+                     'P_topo_ms': dict_bestprof_raw['P_topo (ms)'],
+                     'P_bary_ms': dict_bestprof_raw['P_bary (ms)'],
+                     'best_DM': dict_bestprof_raw['Best DM']
+    }
+    dict_bestprof['bestprof_filename'] = bestprof_filename
+
+    if np.float(dict_bestprof['best_DM']) < DM_range[0] or np.float(dict_bestprof['best_DM']) > DM_range[1]:
+            print "%s  has best DM = %.2f, outside the target range [%.2f - %.2f]. Ignoring..." % (bestprof_filename, np.float(dict_bestprof['best_DM']), DM_range[0], DM_range[1])
+            wrong_DM_candidates = wrong_DM_candidates + 1
+
+    else:
+            list_dict_candidates.append(dict_bestprof)
+
+
+print
+print
+print "WARNING: Ignored %d candidates DM outside expected range." % (wrong_DM_candidates)
+print
+N_candidates = N_bestprof - wrong_DM_candidates
+
+list_dict_candidates_sorted = sorted(list_dict_candidates, key = lambda i: i['chi'], reverse=True)
+
+FNULL = open(os.devnull, 'w')
+j = 0
+while j < N_candidates:
+        dict_bestprof = list_dict_candidates_sorted[j]
+        pfd_cand_filename = dict_bestprof['bestprof_filename'].replace(".bestprof", "")
+        png_cand_filename = dict_bestprof['bestprof_filename'].replace(".bestprof", ".png")
+        ps_cand_filename  = dict_bestprof['bestprof_filename'].replace(".bestprof", ".ps")
+
+        current_cand = ps_cand_filename
+        
+        P_cand_ms = np.float(dict_bestprof['P_bary_ms'])
+        DM_best_cand = np.float(dict_bestprof['best_DM'])
+        
+        cand_basename = os.path.splitext(current_cand)[0]
+        if cand_basename.startswith("GOOD_"):
+                cand_basename = cand_basename[5:]
+
+        print
+        print "%4d /%d ): %s" % (j, N_candidates-1, current_cand)
+        print "P_bary (ms) = %.15f   | Best DM  = %.2f" % (P_cand_ms, DM_best_cand) 
+        print
+        #print "list_periods_ms = ", list_periods_ms
+
+        
+        candidate_is_known = check_if_already_known(P_cand_ms, list_periods_ms, list_doppler_factors, list_names, numharm, zaplist)
+        if flag_flag_redetections == 0:
+                if flag_use_evince == 1:
+                        proc = subprocess.Popen(['evince', current_cand], stderr=FNULL)
+                else:     
+                        proc = subprocess.Popen(['gv', '-orientation=landscape', '-scale=0.7', current_cand], stderr=FNULL)
+                #proc_showpfd = subprocess.Popen(['show_pfd', current_cand], stderr=FNULL)
+                string_operation = ask_for_operation()
+        else:
+                if candidate_is_known == True:
+                        string_operation = "r"
+                elif candidate_is_known == False:
+                        string_operation = "n"
+        
+        list_str_op = string_operation.split()
+        str_op = ''.join(list_str_op)
+
+        if str_op == "":
+                str_op = "n"
+        
+        if (str_op[0] == "c" or str_op[0] == "C"):
+                j = int(str_op[1:])
+        elif (str_op[0] == "n" or str_op[0] == "N"):
+                j = j+1
+        elif (str_op[0] == "b" or str_op[0] == "b"):
+                j = j-1
+        elif (str_op[0] == "l" or str_op[0] == "l"):
+                show_known_pulsars(list_names, list_periods_ms, list_doppler_factors)
+
+        elif (str_op[0] == "g" or str_op[0] == "G"):
+                for file_to_rename in [ f for f in glob.glob( current_cand.split(".ps")[0] + "*" ) ] :
+                        if not file_to_rename.startswith("GOOD_"):
+                                print "%s will be renamed!" % file_to_rename
+                                os.rename( file_to_rename, "GOOD_"+file_to_rename)
+                        else:
+                                print "%s already MARKED" % file_to_rename
+
+                j = j+1
+
+        elif (str_op[0] == "r" or str_op[0] == "R"):
+                for file_to_rename in [ f for f in glob.glob( current_cand.split(".ps")[0] + "*" ) ] :
+                        if not file_to_rename.startswith("REDET_"):
+                                print "%s will be renamed!" % file_to_rename
+                                os.rename( file_to_rename, "REDET_"+file_to_rename)
+                        else:
+                                print "%s already MARKED" % file_to_rename
+
+                j = j+1
+
+                
+        elif (str_op[0] == "x" or str_op[0] == "X"):
+                for file_to_rename in [ f for f in glob.glob( current_cand.split(".ps")[0] + "*" ) ]:
+                        if file_to_rename.startswith("GOOD"):
+                                print "%s will be renamed (removing 'GOOD_')!" % file_to_rename
+                                os.rename( file_to_rename, file_to_rename[5:])
+                        elif file_to_rename.startswith("REDET"):
+                                print "%s will be renamed (removing 'REDET_')!" % file_to_rename
+                                os.rename( file_to_rename, file_to_rename[6:])
+                j = j+1
+                
+        elif str_op == "done":
+                exit()                
+            
+        if flag_flag_redetections == 0: 
+                proc.terminate()
+
+if flag_flag_redetections == 1:
+        os.mkdir("REDETECTIONS")
+        os.system("mv REDET_* REDETECTIONS")
+                
+
+
+    
+
+
+            
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
