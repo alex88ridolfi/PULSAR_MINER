@@ -10,15 +10,64 @@ import psrfits    #From PRESTO
 import filterbank #From PRESTO
 import rfifind    #From PRESTO
 import sifting    #From PRESTO
-import prestofft  #From pypulsar
-import datfile as datfile_pypulsar
+import infodata   #From PRESTO
+
 
 import warnings
 from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.0 (10Apr2020)"
+string_version = "1.0 (16Apr2020)"
+
+
+class Inffile(object):
+        def __init__(self, inffilename):
+                inffile = open(inffilename, "r")
+                for line in inffile:
+                        if "Data file name without suffix" in line:
+                                self.datafilebasenam = line.split("=")[-1].strip()
+                        elif "Telescope used" in line:
+                                self.telescope = line.split("=")[-1].strip()
+                        elif "Instrument used" in line:
+                                self.instrument = line.split("=")[-1].strip()
+                        elif "Object being observed" in line:
+                                self.source = line.split("=")[-1].strip()
+                        elif "J2000 Right Ascension" in line:
+                                self.RAJ = line.split("=")[-1].strip()
+                        elif "J2000 Declination" in line:
+                                self.DECJ = line.split("=")[-1].strip()
+                        elif "Data observed by" in line:
+                                self.observer = line.split("=")[-1].strip()
+                        elif "Epoch of observation" in line:
+                                self.start_MJD = np.float128(line.split("=")[-1].strip())
+                        elif "Barycentered?" in line:
+                                self.barycentered = int(line.split("=")[-1].strip())
+                        elif "Number of bins in the time series" in line:
+                                self.nsamples = int(line.split("=")[-1].strip())
+                        elif "Width of each time series bin" in line:
+                                self.tsamp_s = np.float128(line.split("=")[-1].strip())
+                        elif "Any breaks in the data?" in line:
+                                self.breaks_in_data = int(line.split("=")[-1].strip())
+                        elif "Type of observation" in line:
+                                self.obstype = line.split("=")[-1].strip()
+                        elif "Beam diameter" in line:
+                                self.beamdiameter = np.float128(line.split("=")[-1].strip())
+                        elif "Dispersion measure" in line:
+                                self.DM = np.float128(line.split("=")[-1].strip())
+                        elif "Central freq of low channel" in line:
+                                self.freq_ch1 = np.float128(line.split("=")[-1].strip())
+                        elif "Total bandwidth" in line:
+                                self.bw = np.float128(line.split("=")[-1].strip())
+                        elif "Number of channels" in line:
+                                self.nchan = int(line.split("=")[-1].strip())
+                        elif "Channel bandwidth" in line:
+                                self.bw_chan = np.float128(line.split("=")[-1].strip())
+                        elif "Data analyzed by" in line:
+                                self.analyzer = line.split("=")[-1].strip()
+                inffile.close()
+
+
 
 class Observation(object):
         def __init__(self, file_name, data_type="psrfits", verbosity_level=1):
@@ -266,7 +315,7 @@ def sift_candidates(work_dir, LOG_basename,  dedispersion_dir, observation_basen
 
 
 
-def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, seg, ck, T_obs_s, candidate, ignorechan_list, mask, other_flags_prepfold="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, what_fold="rawdata", threads_max=1):
+def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, seg, ck, T_obs_s, candidate, ignorechan_list, mask, other_flags_prepfold="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, what_fold="rawdata", num_simultaneous_folds=1):
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
         cand = candidate
@@ -294,7 +343,6 @@ def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, 
                 file_to_fold = os.path.join(dir_dedispersion, obs, seg, ck, cand.filename.replace("2017_DM", "_%s_%s"% (seg, ck)).split("_ACCEL")[0] + ".dat" )
                 cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -o ts_fold_%s_%s_%s_DM%.2f_%s   %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
         elif what_fold=="rawdata":
-                #print "rawdata:: seg = ", seg
                 file_to_fold = raw_datafile
                 if seg == "full":
                         cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -dm %.2f %s -mask %s -o raw_fold_%s_%s_%s_DM%.2f_%s    %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, cand.DM, flag_ignorechan, mask, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
@@ -432,15 +480,14 @@ def check_rednoise_outfiles(fftfile_rednoise_abspath, verbosity_level=0):
 
 def check_accelsearch_result(fft_infile, zmax, verbosity_level=0):
         fft_infile_nameonly = os.path.basename(fft_infile)
-        #print "check_accelsearch_result:: sono qui! type(zmax): ", type(zmax) 
         fft_infile_basename = os.path.splitext(fft_infile_nameonly)[0]
         
-        if verbosity_level >= 1:
+        if verbosity_level >= 2:
                 print "check_accelsearch_result:: infile_basename: ", fft_infile_basename
                 print "check_accelsearch_result:: ACCEL_filename = ", ACCEL_filename
                 print "check_accelsearch_result:: ACCEL_cand_filename" , ACCEL_cand_filename
                 print "check_accelsearch_result:: ACCEL_txtcand_filename = ", ACCEL_txtcand_filename
-                print "check_accelsearch_result:: sono qui 2!"
+
         
         ACCEL_filename                =  fft_infile.replace(".fft", "_ACCEL_%d" % (zmax))
         ACCEL_cand_filename           =  fft_infile.replace(".fft", "_ACCEL_%d.cand" % (zmax))
@@ -465,7 +512,6 @@ def check_accelsearch_result(fft_infile, zmax, verbosity_level=0):
 
 def check_jerksearch_result(fft_infile, zmax, wmax, verbosity_level=0):
         fft_infile_nameonly = os.path.basename(fft_infile)
-        #print "check_jerksearch_result:: I am here!"
         fft_infile_basename = os.path.splitext(fft_infile_nameonly)[0]
         
         if verbosity_level >= 1:
@@ -509,7 +555,7 @@ def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags=""
                 print "BEGIN ACCELSEARCH ----------------------------------------------------------------------"
 
                 print "accelsearch:: cmd_accelsearch: ", cmd_accelsearch
-                print "accelsearch:: AND THIS IS THE ENV: ", dict_env
+                print "accelsearch:: ENV: ", dict_env
                 print "accelsearch:: check_accelsearch_result(infile, int(zmax)) :: %s" % (check_accelsearch_result(infile, int(zmax)) )
                 print "accelsearch:: work_dir = %s" % (work_dir)
                 print "accelsearch:: infile = %s" % (infile)
@@ -592,42 +638,34 @@ def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_m
         
         
         for datfile_name in list_datfiles_to_split:
-                #print "sono nel loop:: ", datfile_name
-                datfile = datfile_pypulsar.Datfile(datfile_name)
-                #print "sono nel loop:: ho importato il file ", datfile_name
-                info_datfile = datfile.inf
-        
-                #print "sono nel loop:: qui sono info"
+                inffile_name = datfile_name.replace(".dat", ".inf")
+                info_datfile = infodata.infodata(inffile_name)
+
                 t_samp_s = info_datfile.dt
-                #print "sono nel loop:: ho importato il file e ora ho dt"
+                
                 N_samp = info_datfile.N
                 T_obs_s = t_samp_s * N_samp
-                #print "sono nel loop:: ho importato il file e ora ho Tobs"
                 
                 start_fraction = (i_chunk * segment_length_s )/T_obs_s
                 numout = make_even_number(int(segment_length_s / t_samp_s))
 
-                #print "sono nel loop:: numout = %s, dt = %s" % ( numout, t_samp_s)
-                #print "start_fraction = ", start_fraction
+                
                 string_min =  "%dm" % int(segment_min)
                 string_chunck = "ck%02d" % i_chunk
-                path_old = datfile.basefn
+                path_old = os.path.splitext(datfile_name)[0]
                 path_new = path_old.replace("full", string_min).replace("ck00", string_chunck)
                 
                 new_outfile_name = "%s" % (os.path.basename(path_new)) 
                 
-                #print "sono nel loop:: new_outfile_name = ", new_outfile_name
                 cmd_prepdata_split = "prepdata -nobary -o %s -start %.3f -numout %s %s" % (new_outfile_name, start_fraction, numout,  datfile_name)
-                #print
-                #print "split_into_chunks:: cmd_prepdata_split = ", cmd_prepdata_split
-                #print "with work_dir = ", work_dir
                 
                 output_datfile = "%s/%s.dat" % (work_dir, new_outfile_name)
                 output_inffile = "%s/%s.dat" % (work_dir, new_outfile_name)
                 if check_prepdata_outfiles(output_datfile.replace(".dat", "")) == False:
                         execute_and_log(cmd_prepdata_split, work_dir, log_abspath, dict_env, flag_LOG_append)
                 else:
-                        print "NOTE: %s already exists. Skipping it." % (new_outfile_name)
+                        if verbosity_level >= 1:
+                                print "NOTE: '%s.dat' already exists. No need to create it again." % (new_outfile_name)
 
 
 
@@ -660,12 +698,14 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
                 print "periodicity_search_FFT:: list_files_to_search = ", list_files_to_search
 
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
-        print "\033[1m >> TIP:\033[0m Follow periodicity search with: \033[1mtail -f %s\033[0m" % (log_abspath)
+        if verbosity_level >= 1:
+                print
+                print "\033[1m >> TIP:\033[0m Follow periodicity search with: \033[1mtail -f %s\033[0m" % (log_abspath)
 
         zapfile_nameonly = os.path.basename(zapfile)
         for i in range(N_files_to_search):
                 if verbosity_level >= 2:
-                        print "periodicity_search_FFT: inside loop con i = %d / %d" % (i, len(list_files_to_search))
+                        print "periodicity_search_FFT: inside loop with i = %d / %d" % (i, len(list_files_to_search))
                 dat_file = list_files_to_search[i]
                 dat_file_nameonly = os.path.basename(dat_file)
                 fft_file = dat_file.replace(".dat", ".fft")
@@ -769,8 +809,11 @@ def make_birds_file(ACCEL_0_filename, out_dir, log_filename, width_Hz, flag_grow
 
                 
 def get_Fourier_bin_width(fft_infile):
-        FFT_spectrum = prestofft.PrestoFFT(fft_infile)
-        fourier_bin_width_Hz = FFT_spectrum.freqs[1] - FFT_spectrum.freqs[0]
+        inffile_name = fft_infile.replace(".fft", ".inf")
+        inffile = infodata.infodata(inffile_name)
+        Tobs_s =  inffile.dt * inffile.N
+        fourier_bin_width_Hz = 1./Tobs_s
+        
         return fourier_bin_width_Hz
 
 def check_zaplist_outfiles(fft_infile, verbosity_level=0):
@@ -1001,20 +1044,25 @@ def prepdata(infile, out_dir, LOG_basename, DM, Nsamples=0, ignorechan_list="", 
 
 
 
-def make_rfifind_mask(infile, out_dir, LOG_basename, time_interval=2.0, intfrac=0.3, chanfrac=0.7, chans_to_zap="", other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
+def make_rfifind_mask(infile, out_dir, LOG_basename, time=2.0, freqsig=6.0, timesig=10.0, intfrac=0.3, chanfrac=0.7, time_intervals_to_zap="", chans_to_zap="", other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
 
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
 
-        cmd_rfifind = "rfifind %s -o %s -intfrac %s -chanfrac %s -zapchan %s -time %s %s" % (other_flags, infile_basename, intfrac, chanfrac, chans_to_zap, time_interval, infile)
+        flag_zapints = ""
+        flag_zapchan = ""
+        if time_intervals_to_zap != "":
+                flag_zapints = "-zapints %s" %  (time_intervals_to_zap)
+        if chans_to_zap != "":
+                flag_zapchan = "-zapchan %s" %  (chans_to_zap)
+
+        cmd_rfifind = "rfifind %s -o %s -time %s -freqsig %s -timesig %s -intfrac %s -chanfrac %s %s %s %s" % (other_flags, infile_basename, time, freqsig, timesig, intfrac, chanfrac, flag_zapints, flag_zapchan, infile)
         if verbosity_level >= 2:
                 print "%s | Running:" % (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M"); sys.stdout.flush()
                 print "%s" % (cmd_rfifind) ; sys.stdout.flush()
     
         flag_files_present = check_rfifind_outfiles(out_dir, infile_basename)
-        
-        #print "\033[1m >> TIP:\033[0m Check rfifind progress with '\033[1mtail -f %s\033[0m'" % (log_abspath)
         
         if flag_files_present == True:
                 if verbosity_level >= 1:
@@ -1165,8 +1213,10 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                 print "ERROR: requested number of subbands is %d, which is not an integer divisor of the number of channels %d! " % (nsubbands, nchan)
                 exit()
 
-        print "Dedispersing with %d subbands (original number of channels: %d)..." % (nsubbands, nchan)
-
+        if verbosity_level >= 1:
+                print "Dedispersing with %d subbands (original number of channels: %d)" % (nsubbands, nchan)
+                print
+                
         if verbosity_level >= 2:
                 print "dedisperse::  Checking prepsubband results..."
         if check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=1) == True:
@@ -1179,7 +1229,6 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                                 print "Checking results at: %s" % (out_dir)
                         if verbosity_level >= 1:
                                 print "\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mtail -f %s\033[0m'" % (log_abspath)
-                                print
                         for i in range(N_schemes):
                                 #if Nsamples >= 0:
                                 #        flag_numout = "-numout %d " % (make_even_number(int(Nsamples/np.float(list_DD_schemes[i]['downsamp']))))
@@ -1188,14 +1237,17 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                                         
                                 prepsubband_outfilename = "%s_%s_%s" % (infile_basename, segment_label, chunk_label)
                                 cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'], list_DD_schemes[i]['downsamp'], nsubbands, infile)
-                                print "Running prepsubband with scheme %d/%d on observation '%s'..." % (i+1, N_schemes, infile), ; sys.stdout.flush()
+                                if verbosity_level >= 1:
+                                        print "Running prepsubband with scheme %d/%d on observation '%s'..." % (i+1, N_schemes, infile), ; sys.stdout.flush()
                                 
                                 if verbosity_level >= 2:
                                         print "dedisperse:: %d) RUNNING: %s" % (i, cmd_prepsubband)
                                 execute_and_log("which prepsubband", out_dir, log_abspath, dict_env, 1)
                                 execute_and_log(cmd_prepsubband, out_dir, log_abspath, dict_env, 1)
-                                print "done!"; sys.stdout.flush()
-                        
+                                if verbosity_level >= 1:
+                                        print "done!"; sys.stdout.flush()
+                                        print
+                                        print
 
 
 def check_zapbirds_outfiles2(zapped_fft_filename, verbosity_level=0):
@@ -1317,7 +1369,7 @@ class SurveyConfiguration(object):
                 self.list_datafiles = []
 
                 
-                self.list_survey_configuration_ordered_params = [ 'SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'USE_CUDA', 'CUDA_IDS', 'LIST_SEGMENTS', 'THREADS_MAX', 'SIFTING_FLAG_REMOVE_DUPLICATES'  , 'SIFTING_FLAG_REMOVE_DM_PROBLEMS' , 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
                 
@@ -1348,10 +1400,13 @@ class SurveyConfiguration(object):
                         elif key == "JERKSEARCH_NCPUS":                              self.jerksearch_ncpus                 = int(self.dict_survey_configuration[key])
                         elif key == "PERIOD_TO_SEARCH_MIN":                          self.period_to_search_min             = np.float(self.dict_survey_configuration[key])
                         elif key == "PERIOD_TO_SEARCH_MAX":                          self.period_to_search_max             = np.float(self.dict_survey_configuration[key])
-                        elif key == "RFIFIND_CHANS_TO_ZAP":                          self.rfifind_chans_to_zap             = self.dict_survey_configuration[key]
-                        elif key == "RFIFIND_TIME_INTERVALS_TO_ZAP":                 self.rfifind_time_interval            = self.dict_survey_configuration[key]
+                        elif key == "RFIFIND_TIME":                                  self.rfifind_time                     = self.dict_survey_configuration[key]
+                        elif key == "RFIFIND_FREQSIG":                               self.rfifind_freqsig                  = self.dict_survey_configuration[key]
+                        elif key == "RFIFIND_TIMESIG":                               self.rfifind_timesig                  = self.dict_survey_configuration[key]
                         elif key == "RFIFIND_INTFRAC":                               self.rfifind_intfrac                  = self.dict_survey_configuration[key]
                         elif key == "RFIFIND_CHANFRAC":                              self.rfifind_chanfrac                 = self.dict_survey_configuration[key]
+                        elif key == "RFIFIND_CHANS_TO_ZAP":                          self.rfifind_chans_to_zap             = self.dict_survey_configuration[key]
+                        elif key == "RFIFIND_TIME_INTERVALS_TO_ZAP":                 self.rfifind_time_intervals_to_zap    = self.dict_survey_configuration[key]
                         elif key == "RFIFIND_FLAGS":                                 self.rfifind_flags                    = self.dict_survey_configuration[key]
                         elif key == "IGNORECHAN_LIST":                               self.ignorechan_list                  = self.dict_survey_configuration[key]
                         elif key == "PREPDATA_FLAGS":                                self.prepdata_flags                   = self.dict_survey_configuration[key]
@@ -1364,7 +1419,6 @@ class SurveyConfiguration(object):
                         elif key == "USE_CUDA":                                      self.flag_use_cuda                    = int(self.dict_survey_configuration[key])
                         elif key == "CUDA_IDS":                                      self.list_cuda_ids                    = [int(x) for x in self.dict_survey_configuration[key].split(",")]
                         elif key == "LIST_SEGMENTS":                                 self.list_segments                    = self.dict_survey_configuration[key].split(",")
-                        elif key == "THREADS_MAX":                                   self.threads_max                      = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_FLAG_REMOVE_DUPLICATES" :               self.sifting_flag_remove_duplicates   = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_FLAG_REMOVE_DM_PROBLEMS" :              self.sifting_flag_remove_dm_problems  = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_FLAG_REMOVE_HARMONICS" :                self.sifting_flag_remove_harmonics    = int(self.dict_survey_configuration[key])
@@ -1372,6 +1426,7 @@ class SurveyConfiguration(object):
                         elif key == "SIFTING_MINIMUM_DM" :                           self.sifting_minimum_DM               = np.float(self.dict_survey_configuration[key])
                         elif key == "SIFTING_SIGMA_THRESHOLD" :                      self.sifting_sigma_threshold          = np.float(self.dict_survey_configuration[key])
                         elif key == "PREPFOLD_FLAGS" :                               self.prepfold_flags                   = self.dict_survey_configuration[key]
+                        elif key == "NUM_SIMULTANEOUS_FOLDS":                        self.num_simultaneous_folds           = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_TIMESERIES" :                         self.flag_fold_timeseries             = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_RAWDATA" :                            self.flag_fold_rawdata                = int(self.dict_survey_configuration[key])
                         elif key == "STEP_RFIFIND":                                  self.flag_step_rfifind                = int(self.dict_survey_configuration[key])
@@ -1449,7 +1504,7 @@ def init_default(observation_filename):
        
 
         dict_survey_configuration_default_values = { 'SEARCH_LABEL':                        "%s               # Label of this search project" % os.path.basename(os.getcwd()),
-                                                     'ROOT_WORKDIR':                        "%s               # Path of the working directory" % os.getcwd(),
+                                                     'ROOT_WORKDIR':                        "%s               # Path of the root working directory" % os.getcwd(),
                                                      'DATA_TYPE':                           "%20s       # Options: filterbank, psrfits" % (default_file_format),
                                                      'PRESTO':                              "%s               # Path of the main PRESTO installation" % presto_path,                                   
                                                      'PRESTO_GPU':                          "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,                               
@@ -1465,11 +1520,15 @@ def init_default(observation_filename):
                                                      'JERKSEARCH_NCPUS':                    "%d               # Number of CPU cores to use for jerk search" % (multiprocessing.cpu_count()),
                                                      'PERIOD_TO_SEARCH_MIN':                "0.001            # Mimimum acceptable candidate period (s) ",                     
                                                      'PERIOD_TO_SEARCH_MAX':                "20.0             # Maximum acceptable candidate period (s) ",                     
-                                                     'RFIFIND_CHANS_TO_ZAP':                "\"\"             # List of channels to zap in the RFIFIND mask",                     
-                                                     'RFIFIND_TIME_INTERVALS_TO_ZAP':       "\"\"             # List of time intervals to zap in the RFIFIND mask",     
+                                                     'RFIFIND_TIME':                        "2.1            # Value for RFIFIND -time option",
+                                                     'RFIFIND_FREQSIG':                     "6.0            # Value for RFIFIND -freqsig option",
+                                                     'RFIFIND_TIMESIG':                     "10.0           # Value for RFIFIND -timesig option",           
                                                      'RFIFIND_INTFRAC':                     "0.05           # Value for RFIFIND -intfrac option",           
                                                      'RFIFIND_CHANFRAC':                    "0.7            # Value for RFIFIND -chanfrac option",                         
+                                                     'RFIFIND_CHANS_TO_ZAP':                "\"\"             # List of channels to zap in the RFIFIND mask",                     
+                                                     'RFIFIND_TIME_INTERVALS_TO_ZAP':       "\"\"             # List of time intervals to zap in the RFIFIND mask",     
                                                      'RFIFIND_FLAGS':                       "\"\"             # Any additional options to give to RFIFIND",
+
                                                      'IGNORECHAN_LIST':                     "\"\"             # List of channels to completey ignore from the analysis (PRESTO -ignorechan option)",
                                                      'PREPDATA_FLAGS':                      "\"\"             # Any additional options to give to PREPDATA",
                                                      'PREPSUBBAND_FLAGS':                   "\"-ncpus 4\"     # Any additional options to give to PREPSUBBAND", 
@@ -1482,7 +1541,7 @@ def init_default(observation_filename):
                                                      'USE_CUDA':                            "%s               # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,                                 
                                                      'CUDA_IDS':                            "0               # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",      
                                                      'LIST_SEGMENTS':                       "full             # Comma-separated lengths (in minutes) of chunks to search (e.g. \"full,20,10\")",                            
-                                                     'THREADS_MAX':                         "%-3d             # Max number of CPU cores to use (%d cores detected in your system)" % (multiprocessing.cpu_count()/2, multiprocessing.cpu_count()) ,   
+                                                     'NUM_SIMULTANEOUS_FOLDS':              "%-3d             # Max number of prepfold instances to run at once" % (multiprocessing.cpu_count()/2) ,   
                                                      'SIFTING_FLAG_REMOVE_DUPLICATES' :     "1               # Remove candidate duplicates when sifting? (1=yes, 0=no)",          
                                                      'SIFTING_FLAG_REMOVE_DM_PROBLEMS' :    "1               # Remove candidates that appear in few DM values? (1=yes, 0=no)",         
                                                      'SIFTING_FLAG_REMOVE_HARMONICS' :      "1               # Remove harmoniacally related candidates? (1=yes, 0=no)",           
@@ -1538,10 +1597,13 @@ def init_default(observation_filename):
                 
                 f.write("\n")
                 f.write("# RFIFIND parameters\n")
-                f.write("%-32s %s\n" % ('RFIFIND_CHANS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_CHANS_TO_ZAP']))
-                f.write("%-32s %s\n" % ('RFIFIND_TIME_INTERVALS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_TIME_INTERVALS_TO_ZAP']))
+                f.write("%-32s %s\n" % ('RFIFIND_TIME', dict_survey_configuration_default_values['RFIFIND_TIME']))
+                f.write("%-32s %s\n" % ('RFIFIND_FREQSIG', dict_survey_configuration_default_values['RFIFIND_FREQSIG']))
+                f.write("%-32s %s\n" % ('RFIFIND_TIMESIG', dict_survey_configuration_default_values['RFIFIND_TIMESIG']))
                 f.write("%-32s %s\n" % ('RFIFIND_INTFRAC', dict_survey_configuration_default_values['RFIFIND_INTFRAC']))
                 f.write("%-32s %s\n" % ('RFIFIND_CHANFRAC', dict_survey_configuration_default_values['RFIFIND_CHANFRAC']))
+                f.write("%-32s %s\n" % ('RFIFIND_CHANS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_CHANS_TO_ZAP']))
+                f.write("%-32s %s\n" % ('RFIFIND_TIME_INTERVALS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_TIME_INTERVALS_TO_ZAP']))
                 f.write("%-32s %s\n" % ('IGNORECHAN_LIST', dict_survey_configuration_default_values['IGNORECHAN_LIST']))
                 f.write("\n")
                 f.write("# Additional flags for all the PRESTO routines\n")
@@ -1555,15 +1617,16 @@ def init_default(observation_filename):
                 f.write("%-32s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
                 f.write("\n")
                 f.write("%-32s %s\n" % ('FLAG_REMOVE_FFTFILES', dict_survey_configuration_default_values['FLAG_REMOVE_FFTFILES']))
-                f.write("%-32s %s\n" % ('THREADS_MAX', dict_survey_configuration_default_values['THREADS_MAX']))
                 f.write("%-32s %s\n" % ('SIFTING_FLAG_REMOVE_DUPLICATES', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DUPLICATES']))
                 f.write("%-32s %s\n" % ('SIFTING_FLAG_REMOVE_DM_PROBLEMS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DM_PROBLEMS']))
                 f.write("%-32s %s\n" % ('SIFTING_FLAG_REMOVE_HARMONICS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_HARMONICS']))
                 f.write("%-32s %s\n" % ('SIFTING_MINIMUM_NUM_DMS', dict_survey_configuration_default_values['SIFTING_MINIMUM_NUM_DMS']))
                 f.write("%-32s %s\n" % ('SIFTING_MINIMUM_DM', dict_survey_configuration_default_values['SIFTING_MINIMUM_DM']))
                 f.write("%-32s %s\n" % ('SIFTING_SIGMA_THRESHOLD', dict_survey_configuration_default_values['SIFTING_SIGMA_THRESHOLD']))
+                f.write("\n")
                 f.write("%-32s %s\n" % ('FLAG_FOLD_TIMESERIES', dict_survey_configuration_default_values['FLAG_FOLD_TIMESERIES']))
                 f.write("%-32s %s\n" % ('FLAG_FOLD_RAWDATA', dict_survey_configuration_default_values['FLAG_FOLD_RAWDATA']))
+                f.write("%-32s %s\n" % ('NUM_SIMULTANEOUS_FOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_FOLDS']))
                 f.write("\n")
                 f.write("# PIPELINE STEPS TO EXECUTE (1=do, 0=skip)\n")
                 f.write("%-32s %s\n" % ('STEP_RFIFIND', dict_survey_configuration_default_values['STEP_RFIFIND']))
@@ -1760,7 +1823,6 @@ if config.flag_step_rfifind == 1:
         if not os.path.exists(rfifind_masks_dir):         os.mkdir(rfifind_masks_dir)
         if not os.path.exists(LOG_dir):                   os.mkdir(LOG_dir)
 
-        if verbosity_level >= 2: "main:: STEP 1 - RFIFIND: config.threads_max = %d" % (config.threads_max)
 
         for i in range(len(config.list_Observations)):
                 time.sleep(0.2)
@@ -1776,17 +1838,34 @@ if config.flag_step_rfifind == 1:
                 make_rfifind_mask( config.list_Observations[i].file_abspath,
                                                     rfifind_masks_dir,
                                                     LOG_basename,
-                                                    config.rfifind_time_interval,
+                                                    config.rfifind_time,
+                                                    config.rfifind_freqsig,
+                                                    config.rfifind_timesig,
                                                     config.rfifind_intfrac,
                                                     config.rfifind_chanfrac,
+                                                    config.rfifind_time_intervals_to_zap,
                                                     config.rfifind_chans_to_zap,
                                                     config.rfifind_flags,
                                                     config.presto_env,
                                                     verbosity_level
                 )
-                
+
                 config.list_Observations[i].mask = "%s/%s_rfifind.mask" % (rfifind_masks_dir, config.list_Observations[i].file_basename)
 
+                mask = rfifind.rfifind(config.list_Observations[i].mask)
+                fraction_masked_channels = np.float(len(mask.mask_zap_chans))/mask.nchan
+                if verbosity_level >= 1:
+                        print
+                        print "RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.)
+                        print 
+                if fraction_masked_channels > 0.5:
+                        print
+                        print "************************************************************************************************"
+                        print "\033[1m !!! WARNING : %.2f%% of the band was masked! That seems quite a lot! \033[1m !!!" % (fraction_masked_channels * 100.)
+                        print "\033[1m !!! You may want to adjust the RFIFIND parameters in the configuration file (e.g. try to increase RFIFIND_FREQSIG) \033[0m"
+                        print "************************************************************************************************"
+                        time.sleep(10)
+                        
                 weights_file = config.list_Observations[i].mask.replace(".mask", ".weights")
                 if os.path.exists(weights_file):
                         array_weights = np.loadtxt(weights_file, unpack=True, usecols=(0,1,), skiprows=1)
@@ -1865,7 +1944,6 @@ if config.flag_step_zaplist == 1:
                 print "# b) Fourier transform all the files"
                 print "# ==============================================="
                 print
-        TP = ThreadPool(config.threads_max)
 
         config.list_0DM_datfiles = glob.glob("%s/*%s*.dat" % (dir_birdies,config.list_Observations[i].file_basename))   # Collect the *.dat files in the 02_BIRDIES_FOLDERS
         for i in range(len(config.list_0DM_datfiles)):
@@ -1949,7 +2027,7 @@ if config.flag_step_dedisperse == 1:
                 print "##################################################################################################"
                 print
         
-        if verbosity_level >= 2:        print "3) DEDISPERSION DE-REDDENING AND PERIODICITY SEARCH: creating the working directories...",; sys.stdout.flush()
+        if verbosity_level >= 2:        print "3) DEDISPERSION DE-REDDENING AND PERIODICITY SEARCH: creating working directories...",; sys.stdout.flush()
         if not os.path.exists(dir_dedispersion):
                 os.mkdir(dir_dedispersion)
         if verbosity_level >= 2:
@@ -1972,15 +2050,6 @@ if config.flag_step_dedisperse == 1:
         # 2)      LOOP OVER THE SEGMENT
         # 3)           LOOP OVER THE CHUNK
 
-        threads_step_3 = config.threads_max
-        if verbosity_level >= 2:                print "3) DEDISPERSION DE-REDDENING AND PERIODICITY SEARCH: creating the ThreadPool with %d threads..." % (threads_step_3),; sys.stdout.flush()
-        TP = ThreadPool(config.threads_max)
-        if verbosity_level >= 2:                print "done!"; sys.stdout.flush()
-
-
-
-
-
 
 
         # 1) LOOP OVER EACH OBSERVATION
@@ -1988,7 +2057,7 @@ if config.flag_step_dedisperse == 1:
                 obs = config.list_Observations[i].file_basename
                 time.sleep(1.0)
                 work_dir_obs = os.path.join(dir_dedispersion, config.list_Observations[i].file_basename)
-                if verbosity_level >= 2:                print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating the working directory %s" % (work_dir_obs),; sys.stdout.flush()
+                if verbosity_level >= 2:                print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: Creating working directory '%s'..." % (work_dir_obs),; sys.stdout.flush()
                 if not os.path.exists(work_dir_obs):
                         os.mkdir(work_dir_obs)
                 if verbosity_level >= 2:                print "done!"; sys.stdout.flush()
@@ -2004,18 +2073,21 @@ if config.flag_step_dedisperse == 1:
 
 
                 for seg in list_segments:
-                        print "SEGMENT %s of %s" % (seg, sorted(config.dict_search_structure[obs].keys()))
                         work_dir_segment = os.path.join(work_dir_obs, "%s" % seg)
-                        if verbosity_level >= 1:          print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating the working directory %s" % (work_dir_segment),; sys.stdout.flush()
+                        if verbosity_level >= 1:          print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating working directory '%s'..." % (work_dir_segment),; sys.stdout.flush()
                         if not os.path.exists(work_dir_segment):
                                 os.makedirs(work_dir_segment)
                         if verbosity_level >= 1:                print "done!"; sys.stdout.flush()
 
         # 3) LOOP OVER THE CHUNK
                         for ck in sorted(config.dict_search_structure[obs][seg].keys()):
-                                print "SEGMENT %s of %s  -- chunk %s of %s" % (seg, sorted(config.dict_search_structure[obs].keys()), ck, sorted(config.dict_search_structure[obs][seg].keys()) )
+                                if verbosity_level >= 1:
+                                        print
+                                        print "**************************************************************"
+                                        print "SEGMENT %s of %s  -- chunk %s of %s" % (seg, sorted(config.dict_search_structure[obs].keys()), ck, sorted(config.dict_search_structure[obs][seg].keys()) )
+                                        print "**************************************************************"
                                 work_dir_chunk = os.path.join(work_dir_segment, ck)
-                                if verbosity_level >= 1:        print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating the working directory %s" % (work_dir_chunk),; sys.stdout.flush()
+                                if verbosity_level >= 1:        print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: Creating working directory '%s'..." % (work_dir_chunk),; sys.stdout.flush()
                                 if not os.path.exists(work_dir_chunk):
                                         os.mkdir(work_dir_chunk)
                                 if verbosity_level >= 1:                print "done!"; sys.stdout.flush()
@@ -2026,8 +2098,6 @@ if config.flag_step_dedisperse == 1:
                                 zapfile = "%s/%s_DM00.00.zaplist" % (dir_birdies, config.list_Observations[i].file_basename)
                 
 
-                                if verbosity_level >= 1:
-                                        print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: Adding file %d) \"%s\" to the queue..." % (i+1, config.list_Observations[i].file_nameonly), ; sys.stdout.flush()
                                         
                                 if verbosity_level >= 2:
                                         print "mask::: ", config.list_Observations[i].mask
@@ -2080,8 +2150,7 @@ if config.flag_step_dedisperse == 1:
                                 
 
           
-        TP.close()
-        TP.join()
+
 
 
 
@@ -2094,7 +2163,7 @@ if config.flag_step_sifting == 1:
 
 
         dir_sifting = os.path.join(config.root_workdir, "04_SIFTING")
-        if verbosity_level >= 1:                    print "4) CANDIDATE SIFTING: creating the working directories...",; sys.stdout.flush()
+        if verbosity_level >= 1:                    print "4) CANDIDATE SIFTING: Creating working directories...",; sys.stdout.flush()
         if not os.path.exists(dir_sifting):
                 os.mkdir(dir_sifting)
         if verbosity_level >= 1:                    print "done!"
@@ -2118,7 +2187,7 @@ if config.flag_step_sifting == 1:
                                 LOG_basename = "04_sifting_%s_%s_%s" % (obs, seg, ck)
                                 work_dir_candidate_sifting = os.path.join(dir_sifting, obs, seg, ck)
 
-                                if verbosity_level >= 1:        print "4) CANDIDATE SIFTING: creating the working directory %s..." % (work_dir_candidate_sifting),; sys.stdout.flush()
+                                if verbosity_level >= 1:        print "4) CANDIDATE SIFTING: Creating working directory '%s'..." % (work_dir_candidate_sifting),; sys.stdout.flush()
                                 if not os.path.exists(work_dir_candidate_sifting):
                                         os.mkdir(work_dir_candidate_sifting)
                                 if verbosity_level >= 1:        print "done!"
@@ -2156,7 +2225,7 @@ if config.flag_step_folding == 1:
         print
 
         dir_folding = os.path.join(config.root_workdir, "05_FOLDING")
-        if verbosity_level >= 1: print "5) FOLDING: creating the working directories...",; sys.stdout.flush()
+        if verbosity_level >= 1: print "5) FOLDING: creating working directories...",; sys.stdout.flush()
         if not os.path.exists(dir_folding):
                 os.mkdir(dir_folding)
         if verbosity_level >= 1: print "done!"
@@ -2167,7 +2236,7 @@ if config.flag_step_folding == 1:
                 print
 
                 work_dir_candidate_folding = os.path.join(dir_folding, config.list_Observations[i].file_basename)
-                if verbosity_level >= 1:   print "5) CANDIDATE FOLDING: creating the working directory %s..." % (work_dir_candidate_folding),; sys.stdout.flush()
+                if verbosity_level >= 1:   print "5) CANDIDATE FOLDING: creating working directory '%s'..." % (work_dir_candidate_folding),; sys.stdout.flush()
                 if not os.path.exists(work_dir_candidate_folding):
                         os.mkdir(work_dir_candidate_folding)
                 if verbosity_level >= 1:   print "done!"
@@ -2197,8 +2266,12 @@ if config.flag_step_folding == 1:
                 if config.flag_fold_timeseries == 1:
                         
                         LOG_basename = "05_folding_%s_timeseries" % (obs)
-                        print
-                        print "Folding time series \033[1m >> TIP:\033[0m Follow folding progress with '\033[1mtail -f %s/LOG_%s.txt\033[0m'" % (LOG_dir, LOG_basename)
+                        if verbosity_level >= 1:
+                                print
+                                print "Folding time series"
+                                print 
+                                print "\033[1m >> TIP:\033[0m Follow folding progress with '\033[1mtail -f %s/LOG_%s.txt\033[0m'" % (LOG_dir, LOG_basename)
+                                print
                         for seg in sorted(config.dict_search_structure[obs].keys()):
                                 for ck in sorted(config.dict_search_structure[obs][seg].keys()):
                                         for j in range(len(config.dict_search_structure[obs][seg][ck]['candidates'])):
@@ -2223,7 +2296,7 @@ if config.flag_step_folding == 1:
                                                                                      verbosity_level,
                                                                                      1,
                                                                                      "timeseries",
-                                                                                     config.threads_max
+                                                                                     config.num_simultaneous_folds
                                                 )
                                                 tend_folding_cand_ts = time.time()
                                                 time_taken_folding_cand_ts_s = tend_folding_cand_ts - tstart_folding_cand_ts
@@ -2263,7 +2336,7 @@ if config.flag_step_folding == 1:
                                                                                      verbosity_level,
                                                                                      1,
                                                                                      "rawdata",
-                                                                                     config.threads_max
+                                                                                     config.num_simultaneous_folds
                                                 )
                                                 
                                                 #print "done!"
@@ -2272,7 +2345,7 @@ if config.flag_step_folding == 1:
 
 
                 os.chdir(work_dir_candidate_folding)
-                cmd_pm_run_multithread = "%s/pm_run_multithread -cmdfile %s -ncpus %d" % (os.path.dirname(sys.argv[0]), file_script_fold_abspath, config.threads_max)
+                cmd_pm_run_multithread = "%s/pm_run_multithread -cmdfile %s -ncpus %d" % (os.path.dirname(sys.argv[0]), file_script_fold_abspath, config.num_simultaneous_folds)
                 print
                 print 
                 print "5) CANDIDATE FOLDING - Now running:"

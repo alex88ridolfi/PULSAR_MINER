@@ -2,7 +2,7 @@
 
 #################### ALESSANDRO RIDOLFI ########################
 #                        Version 1.2                           #
-#               Bonn, Nov2017- Cagliari, Nov2018               #
+#               Bonn, Nov2017- Cagliari, Apr2020               #
 ################################################################    
 
 import sys, os, os.path, time, datetime, glob
@@ -152,7 +152,6 @@ for line in cmdfile:
         if not line.strip().startswith("#") and line!="\n":
                 if line.startswith("work_dir="):
                         list_line = line.strip().split()
-                        #print "list_line = ", list_line
                         list_work_dirs.append( list_line[0].split("=")[-1]  )
                         list_commands.append(  " ".join(list_line[1:])  )
                 else:
@@ -169,7 +168,6 @@ print "Commands to execute in %d threads:" % (ncpus)
 print
 for i in range(len(list_commands)):
     print "%3d) %s " % (i, list_commands[i])
-    print "     work_dir: %s" % (list_work_dirs[i])
 print
 
 
