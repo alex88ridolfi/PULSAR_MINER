@@ -68,8 +68,8 @@ def show_known_pulsars(list_names, list_periods_ms, list_doppler_factors):
                         string_type = "binary"
                         
                 P = list_periods_ms[i]
-                P_ms_min = P * (1 - list_doppler_factors[i]) - 1.0e-4  #Accounts for covariances with Pdot
-                P_ms_max = P * (1 + list_doppler_factors[i]) + 1.0e-4  #Accounts for covariances with Pdot
+                P_ms_min = P * (1 - list_doppler_factors[i])# * 0.999 #- 1.0e-4  #Accounts for covariances with Pdot
+                P_ms_max = P * (1 + list_doppler_factors[i])# * 1.001 #+ 1.0e-4  #Accounts for covariances with Pdot
 
                 print "PSR %12s (%-8s):      %.15f < P (ms) < %.15f" % (list_names[i], string_type, P_ms_min, P_ms_max)
 
@@ -87,8 +87,8 @@ def check_if_already_known(P_cand_ms, list_known_periods, list_doppler_factors, 
 
 
         P = list_known_periods[i]
-        P_ms_min = P * (1 - list_doppler_factors[i]) - 1.0e-4
-        P_ms_max = P * (1 + list_doppler_factors[i]) + 1.0e-4
+        P_ms_min = P * (1 - list_doppler_factors[i])# * 0.999 # - 1.0e-4
+        P_ms_max = P * (1 + list_doppler_factors[i])# * 1.001 # + 1.0e-4
 
         #print "P_ms min - max (due to Doppler shift): %.10f - %.10f ms" % (P_ms_min, P_ms_max)
 
@@ -106,7 +106,7 @@ def check_if_already_known(P_cand_ms, list_known_periods, list_doppler_factors, 
                     P_known_ms_nh_min = P_ms_min * (np.float(n)/ nh)
                     P_known_ms_nh_max = P_ms_max * (np.float(n)/ nh)
                 
-                    #print "nh = %d/%d  --> Pulsar %s has a period = %.10f - %.10f " % (nh, n, psrname, P_known_ms_nh_min, P_known_ms_nh_max)
+                    #print "nh = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f " % (nh, n, psrname, P, P_known_ms_nh_min, P_known_ms_nh_max)
 
                     if (P_cand_ms >= P_known_ms_nh_min) and (P_cand_ms <= P_known_ms_nh_max):
                         print
@@ -120,7 +120,7 @@ def check_if_already_known(P_cand_ms, list_known_periods, list_doppler_factors, 
                 for n in range(1,16+1):
                     P_known_ms_ns_min = P_ms_min * (np.float(ns) / n)
                     P_known_ms_ns_max = P_ms_max * (np.float(ns) / n)
-                    #print "ns = %d/%d  --> Pulsar %s has a period = %.10f - %.10f " % (n,ns, psrname, P_known_ms_ns_min, P_known_ms_ns_max)
+                    #print "ns = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f " % (n,ns, psrname, P, P_known_ms_ns_min, P_known_ms_ns_max)
 
                     if (P_cand_ms >= P_known_ms_ns_min) and (P_cand_ms <= P_known_ms_ns_max):
                         print
@@ -381,7 +381,8 @@ while j < N_candidates:
                 proc.terminate()
 
 if flag_flag_redetections == 1:
-        os.mkdir("REDETECTIONS")
+        if not os.path.exists("REDETECTIONS"):
+                os.mkdir("REDETECTIONS")
         os.system("mv REDET_* REDETECTIONS")
                 
 

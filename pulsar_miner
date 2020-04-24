@@ -11,16 +11,156 @@ import filterbank #From PRESTO
 import rfifind    #From PRESTO
 import sifting    #From PRESTO
 import infodata   #From PRESTO
-
+import parfile    #From PRESTO
+import psr_utils  #From PRESTO
 
 import warnings
 from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.0 (16Apr2020)"
+string_version = "1.1 (24Apr2020)"
 
 
+class Pulsar(object):
+        def __init__(self, parfilename):
+                LIGHT_SPEED = 2.99792458e10   # Light speed in CGS units
+                
+                pulsar_parfile = parfile.psr_par(parfilename)
+
+                self.parfilename = parfilename
+                if hasattr(pulsar_parfile, 'PSR'):
+                        self.psr_name = pulsar_parfile.PSR
+                elif hasattr(pulsar_parfile, 'PSRJ'):
+                        self.psr_name = pulsar_parfile.PSRJ
+
+                self.PEPOCH = pulsar_parfile.PEPOCH
+                self.F0 = pulsar_parfile.F0
+                self.P0_s = 1./self.F0
+                self.P0_ms = self.P0_s * 1000
+                if hasattr(pulsar_parfile, 'F1'):
+                        self.F1 = pulsar_parfile.F1
+                else:
+                        self.F1 = 0
+                if hasattr(pulsar_parfile, 'F2'):
+                        self.F2	= pulsar_parfile.F2
+		else:
+                        self.F2 = 0
+
+                self.is_binary = hasattr(pulsar_parfile, 'BINARY')
+                
+
+                if self.is_binary:
+                        self.pulsar_type = "binary"
+                        self.binary_model    = pulsar_parfile.BINARY
+                        
+                        if self.binary_model == 'BT' or self.binary_model == 'DD':
+                                self.binary_model    = pulsar_parfile.BINARY
+                                self.Pb_d            = pulsar_parfile.PB
+                                self.Pb_s            = self.Pb_d*86400
+                                self.Fb0             = 1./self.Pb_s
+                                self.x_p_lts         = pulsar_parfile.A1
+                                self.x_p_cm          = pulsar_parfile.A1 * LIGHT_SPEED
+
+                                if hasattr(pulsar_parfile, 'E'):
+                                        self.ecc  = pulsar_parfile.E
+                                elif hasattr(pulsar_parfile, 'ECC'):
+                                        self.ecc  = pulsar_parfile.ECC
+                                        
+                                self.omega_p_deg  = pulsar_parfile.OM
+                                self.omega_p_rad  = pulsar_parfile.OM * np.pi/180
+                                self.T0           = pulsar_parfile.T0
+
+                        elif self.binary_model == 'ELL1':
+                                self.Pb_d      = pulsar_parfile.PB
+				self.Pb_s      = self.Pb_d*86400
+	                        self.Fb0       = 1./self.Pb_s
+                                self.x_p_lts   = pulsar_parfile.A1
+                                self.x_p_cm    = pulsar_parfile.A1 * LIGHT_SPEED
+
+                                self.eps1      = pulsar_parfile.EPS1
+                                self.eps2      = pulsar_parfile.EPS2
+                                self.ecc       = np.sqrt(self.eps1**2  + self.eps2**2)
+                                
+                    	        self.T0           = pulsar_parfile.TASC
+                                self.Tasc         = pulsar_parfile.TASC
+
+                        elif self.binary_model == 'BTX':
+                                self.Fb0       = pulsar_parfile.FB0
+				self.Pb_s      = 1./self.Fb0
+                                self.Pb_d      = self.Pb_s / 86400.
+                                self.x_p_lts   = pulsar_parfile.A1
+                                self.x_p_cm    = pulsar_parfile.A1 * LIGHT_SPEED
+                                if hasattr(pulsar_parfile, 'E'):
+		                        self.ecc  = pulsar_parfile.E
+				elif hasattr(pulsar_parfile, 'ECC'):
+				        self.ecc  = pulsar_parfile.ECC
+                    	        self.T0           = pulsar_parfile.T0
+                                self.Tasc         = pulsar_parfile.T0
+
+                                        
+
+                        self.v_los_max = (2*np.pi * self.x_p_cm / self.Pb_s)
+                        self.doppler_factor = self.v_los_max / LIGHT_SPEED
+
+                else:
+                        # If the pulsar is isolated
+                        self.pulsar_type = "isolated"
+                        self.v_los_max = 0
+                        self.doppler_factor = 1e-4  # Account for Doppler shift due to the Earth motion around the Sun
+
+
+                                
+
+def check_if_cand_is_known(candidate, list_known_pulsars, numharm):
+        #Loop over all the known periods of the pulsars in the cluster
+        P_cand_ms = candidate.p * 1000
+        BOLD = '\033[1m'
+        END  = '\033[0m'
+    
+        for i in range(len(list_known_pulsars)):
+                psrname = list_known_pulsars[i].psr_name
+                
+                P_ms = list_known_pulsars[i].P0_ms
+                P_ms_min = P_ms * (1 - list_known_pulsars[i].doppler_factor)
+                P_ms_max = P_ms * (1 + list_known_pulsars[i].doppler_factor)
+
+                if (P_cand_ms > P_ms_min) and (P_cand_ms < P_ms_max):
+                        #print "%sP_min = %.6f ms < %.6f < %.6f ms = P_max    --> ALREADY KNOWN: PSR %s !!%s" % (BOLD, P_ms_min, P_cand_ms, P_ms_max, psrname, END)
+                        str_harm = "Fundamental (%.7f ms)" % (P_ms)
+                        return True, psrname, str_harm
+
+                else:
+                        #print "----------------- HARMONICS ----"
+                        for nh in range(1, numharm + 1):
+                                for n in range(1,16+1):
+                                        P_known_ms_nh_min = P_ms_min * (np.float(n)/ nh)
+                                        P_known_ms_nh_max = P_ms_max * (np.float(n)/ nh)
+                
+                                        #print "nh = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f  (cand = %.10f)" % (nh, n, psrname, P_ms, P_known_ms_nh_min, P_known_ms_nh_max, P_cand_ms)
+
+                                        if (P_cand_ms >= P_known_ms_nh_min) and (P_cand_ms <= P_known_ms_nh_max):
+                                                #print "%sARGH! Candidate with P = %.10f ms is the %d/%d-th harmonic of pulsar %s (P = %.10f ms)%s" % (BOLD, P_cand_ms, nh, n, psrname, P_ms, END)
+                                                str_harm = "%d/%d of %.7f ms" % ( n, nh, P_ms)
+                                                return True, psrname, str_harm
+
+                
+                        #print "----------------- SUBHARMONICS ----"
+                        for ns in range(2, numharm + 1):
+                                for n in range(1,16+1):
+                                        P_known_ms_ns_min = P_ms_min * (np.float(ns) / n)
+                                        P_known_ms_ns_max = P_ms_max * (np.float(ns) / n)
+                                        #print "ns = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f (cand = %.10f)" % (n, ns, psrname, P_ms, P_known_ms_ns_min, P_known_ms_ns_max, P_cand_ms) 
+
+                                        if (P_cand_ms >= P_known_ms_ns_min) and (P_cand_ms <= P_known_ms_ns_max):
+                                                #print "%sARGH! Candidate with P = %.10f ms is the %d/%d-th subharmonic of pulsar %s (P = %.10f ms%s)" % (BOLD, P_cand_ms, n, ns, psrname, P_ms, END)
+                                                str_harm = "%d/%d of %.7f ms" % ( ns, n, P_ms)
+                                                return True, psrname, str_harm
+                                        
+        return False, "", ""
+
+                        
+                
 class Inffile(object):
         def __init__(self, inffilename):
                 inffile = open(inffilename, "r")
@@ -66,8 +206,7 @@ class Inffile(object):
                         elif "Data analyzed by" in line:
                                 self.analyzer = line.split("=")[-1].strip()
                 inffile.close()
-
-
+        
 
 class Observation(object):
         def __init__(self, file_name, data_type="psrfits", verbosity_level=1):
@@ -138,6 +277,8 @@ class Observation(object):
                                 self.freq_high_MHz    = object_file.specinfo.hi_freq
                                 self.freq_low_MHz     = object_file.specinfo.lo_freq
                                 self.MJD_int          = object_file.specinfo.mjd
+                                self.MJD_sec          = object_file.specinfo.secs
+                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.)
                                 self.nchan            = object_file.specinfo.num_channels
                                 self.observer         = object_file.specinfo.observer
                                 self.project          = object_file.specinfo.project_id
@@ -161,24 +302,11 @@ class Observation(object):
                                 self.freq_high_MHz    = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
                                 self.freq_low_MHz     = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
                                 self.nchan            = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
-
-
-                #Processing properties
-                self.mask             = ""
-                self.ts_DM0           = ""
-                self.fft_DM0          = ""
-                self.fft_DM0_rednoise = ""
-                self.zaplist_file     = ""
-                self.fft_DM0_zapped   = ""
-                self.rfifind          = 'pending'
-                self.dedispersion     = 'pending'
-                self.realfft          = 'pending'
-                self.accelsearch      = 'pending'
-                self.realfft_DM0      = 'pending'
-                self.zaplist          = 'pending'
-                self.prepdata_DM0     = 'pending'
-                self.rednoise_DM0     = 'pending'
-                self.zapbirds         = 'pending'
+                                self.MJD_int          = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
+                                self.MJD_sec_int      = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
+                                self.MJD_sec_frac     = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
+                                self.MJD_sec          = self.MJD_sec_int + self.MJD_sec_frac
+                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.) 
 
 
 def execute_and_log(command, work_dir, log_abspath, dict_envs={}, flag_append=0, verbosity_level=0):
@@ -342,6 +470,7 @@ def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, 
         if what_fold=="timeseries":
                 file_to_fold = os.path.join(dir_dedispersion, obs, seg, ck, cand.filename.replace("2017_DM", "_%s_%s"% (seg, ck)).split("_ACCEL")[0] + ".dat" )
                 cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -o ts_fold_%s_%s_%s_DM%.2f_%s   %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
+                execute_and_log(cmd_prepfold, work_dir, log_abspath, dict_env, flag_LOG_append)
         elif what_fold=="rawdata":
                 file_to_fold = raw_datafile
                 if seg == "full":
@@ -366,7 +495,7 @@ def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, 
 
         file_script_fold.close()
 
-        #execute_and_log(cmd_prepfold, work_dir, log_abspath, dict_env, flag_LOG_append)
+
 
 
 def make_even_number(number_int):
@@ -886,6 +1015,7 @@ def make_zaplist(fft_infile, out_dir, LOG_basename, common_birdies_filename, bir
                         print "Zaplist for %s already exists! " % (fft_infile_basename),
 
         zaplist_filename = fft_infile.replace(".fft", ".zaplist")
+        return zaplist_filename
 
 
 def rednoise(fftfile, out_dir, LOG_basename, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
@@ -1369,7 +1499,7 @@ class SurveyConfiguration(object):
                 self.list_datafiles = []
 
                 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
                 
@@ -1392,6 +1522,8 @@ class SurveyConfiguration(object):
                         elif key == "DM_MAX":                                        self.dm_max                           = self.dict_survey_configuration[key]
                         elif key == "DM_COHERENT_DEDISPERSION":                      self.dm_coherent_dedispersion         = self.dict_survey_configuration[key]
                         elif key == "N_SUBBANDS":                                    self.nsubbands                        = int(self.dict_survey_configuration[key])
+                        elif key == "ZAP_ISOLATED_PULSARS_FROM_FFTS":                self.zap_isolated_pulsars_from_ffts   = int(self.dict_survey_configuration[key])
+                        elif key == "ZAP_ISOLATED_PULSARS_MAX_HARM":                 self.zap_isolated_pulsars_max_harm = int(self.dict_survey_configuration[key])
                         elif key == "ACCELSEARCH_LIST_ZMAX":                         self.accelsearch_list_zmax            = [int(x) for x in self.dict_survey_configuration[key].split(",")]
                         elif key == "ACCELSEARCH_NUMHARM":                           self.accelsearch_numharm              = int(self.dict_survey_configuration[key])
                         elif key == "JERKSEARCH_ZMAX":                               self.jerksearch_zmax                  = int(self.dict_survey_configuration[key])
@@ -1427,6 +1559,7 @@ class SurveyConfiguration(object):
                         elif key == "SIFTING_SIGMA_THRESHOLD" :                      self.sifting_sigma_threshold          = np.float(self.dict_survey_configuration[key])
                         elif key == "PREPFOLD_FLAGS" :                               self.prepfold_flags                   = self.dict_survey_configuration[key]
                         elif key == "NUM_SIMULTANEOUS_FOLDS":                        self.num_simultaneous_folds           = int(self.dict_survey_configuration[key])
+                        elif key == "FLAG_FOLD_KNOWN_PULSARS" :                      self.flag_fold_known_pulsars          = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_TIMESERIES" :                         self.flag_fold_timeseries             = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_RAWDATA" :                            self.flag_fold_rawdata                = int(self.dict_survey_configuration[key])
                         elif key == "STEP_RFIFIND":                                  self.flag_step_rfifind                = int(self.dict_survey_configuration[key])
@@ -1473,8 +1606,15 @@ class SurveyConfiguration(object):
                 print
 
 def init_default(observation_filename):
+
+        # Create known_pulsars folder
+        if not os.path.exists("known_pulsars"):
+                os.mkdir("known_pulsars")
+        
         default_file_format = "filterbank"
+        default_obs = "<observation>"
         if observation_filename != "":
+                default_obs = observation_filename
                 if psrfits.is_PSRFITS(observation_filename) == True:
                         default_file_format = "psrfits"
                         print "Input file '%s' seems to be PSRFITS. Setting default file format to 'psrfits'." % (observation_filename)
@@ -1501,7 +1641,6 @@ def init_default(observation_filename):
                         except:
                                 print "ERROR: no PRESTO/PRESTO_ON_GPU environment variable seems to be defined!"
                                 exit()
-       
 
         dict_survey_configuration_default_values = { 'SEARCH_LABEL':                        "%s               # Label of this search project" % os.path.basename(os.getcwd()),
                                                      'ROOT_WORKDIR':                        "%s               # Path of the root working directory" % os.getcwd(),
@@ -1511,11 +1650,13 @@ def init_default(observation_filename):
                                                      'DM_MIN':                              "2.0              # Minimum DM to search",                                   
                                                      'DM_MAX':                              "100.0            # Maximum DM to search",                                   
                                                      'DM_COHERENT_DEDISPERSION':            "0                # DM value of possible coherent dedispersion (CDD) (0 = NO CDD)",
-                                                     'N_SUBBANDS':                          "0                # Number of subbands to use (0 = use all channels)",         
+                                                     'N_SUBBANDS':                          "0                # Number of subbands to use (0 = use all channels)",
+                                                     'ZAP_ISOLATED_PULSARS_FROM_FFTS':         "0                # Zap the known pulsars in the power spectra? (1=yes, 0=no)",                    
+                                                     'ZAP_ISOLATED_PULSARS_MAX_HARM':       "8                # If zap the known pulsars in the power spectra, do it up to this harmonic ",                    
                                                      'ACCELSEARCH_LIST_ZMAX':               "0,200            # List (comma-separated) of zmax values to use with PRESTO accelsearch ",                    
                                                      'ACCELSEARCH_NUMHARM':                 "8                # Number of harmonics to use for acceleration search",
                                                      'JERKSEARCH_ZMAX':                     "200              # Zmax value to use for jerk search",
-                                                     'JERKSEARCH_WMAX':                     "600              # Wmax value to use for jerk search",
+                                                     'JERKSEARCH_WMAX':                     "600              # Wmax value to use for jerk search (0 = do not do jerk search)",
                                                      'JERKSEARCH_NUMHARM':                  "4                # Number of harmonics to use for jerk search",
                                                      'JERKSEARCH_NCPUS':                    "%d               # Number of CPU cores to use for jerk search" % (multiprocessing.cpu_count()),
                                                      'PERIOD_TO_SEARCH_MIN':                "0.001            # Mimimum acceptable candidate period (s) ",                     
@@ -1536,7 +1677,7 @@ def init_default(observation_filename):
                                                      'REDNOISE_FLAGS':                      "\"\"             # Any additional options to give to REDNOISE",           
                                                      'ACCELSEARCH_FLAGS':                   "\"\"             # Any additional options to give to ACCELSEARCH",         
                                                      'ACCELSEARCH_GPU_FLAGS':               "\"\"             # Any additional options to give to ACCELSEARCH of PRESTO_ON_GPU",
-                                                     'PREPFOLD_FLAGS' :                     "\"-ncpus 4\"     # Any additional options to give to PREPFOLD",
+                                                     'PREPFOLD_FLAGS' :                     "\"-ncpus 4 -n 64\"     # Any additional options to give to PREPFOLD",
                                                      'FLAG_REMOVE_FFTFILES':                "0               # Remove FFT files after searching to save half the disk space? (1=yes, 0=no)", 
                                                      'USE_CUDA':                            "%s               # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,                                 
                                                      'CUDA_IDS':                            "0               # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",      
@@ -1548,8 +1689,11 @@ def init_default(observation_filename):
                                                      'SIFTING_MINIMUM_NUM_DMS' :            "3               # Minimum number of DM values at which a candidate has to appear in order to be considered 'good'",                 
                                                      'SIFTING_MINIMUM_DM' :                 "2.0             # Minimum DM value at  at which a candidate has to appear in order to be considered 'good'",                      
                                                      'SIFTING_SIGMA_THRESHOLD' :            "4.0             # Minimum acceptable significance of a candidate",                 
+                                                     
+                                                     'FLAG_FOLD_KNOWN_PULSARS' :            "1               # Fold candidates that are likely redetections of known pulsars? (1=yes, 0=no)",          
                                                      'FLAG_FOLD_TIMESERIES' :               "1               # Fold the candidates using the time series (super-fast, but no frequency information)? (1=yes, 0=no)",                    
-                                                     'FLAG_FOLD_RAWDATA' :                  "1               # Fold the candidates using raw data file (slow, but has all the information)? (1=yes, 0=no)",                       
+                                                     'FLAG_FOLD_RAWDATA' :                  "1               # Fold the candidates using raw data file (slow, but has all the information)? (1=yes, 0=no)",
+
                                                      'STEP_RFIFIND':                        "1               # Run the RFIFIND step? (1=yes, 0=no)",
                                                      'STEP_ZAPLIST':                        "1               # Run the ZAPLIST step? (1=yes, 0=no)",                             
                                                      'STEP_DEDISPERSE':                     "1               # Run the DEDISPERSION step? (1=yes, 0=no)",             
@@ -1568,75 +1712,79 @@ def init_default(observation_filename):
                 print "******************"
                 print
         with open(default_cfg_filename, "w") as f:
-                f.write("%-32s %s\n" % ('SEARCH_LABEL', dict_survey_configuration_default_values['SEARCH_LABEL']))
-                f.write("%-32s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
-                f.write("%-32s %s\n" % ('DATA_TYPE', dict_survey_configuration_default_values['DATA_TYPE']))
+                f.write("%-35s %s\n" % ('SEARCH_LABEL', dict_survey_configuration_default_values['SEARCH_LABEL']))
+                f.write("%-35s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
+                f.write("%-35s %s\n" % ('DATA_TYPE', dict_survey_configuration_default_values['DATA_TYPE']))
                 f.write("\n")
                 f.write("# PRESTO installations and GPU acceleration\n")
-                f.write("%-32s %s\n" % ('PRESTO', dict_survey_configuration_default_values['PRESTO']))
-                f.write("%-32s %s\n" % ('PRESTO_GPU', dict_survey_configuration_default_values['PRESTO_GPU']))
-                f.write("%-32s %s\n" % ('USE_CUDA', dict_survey_configuration_default_values['USE_CUDA']))
-                f.write("%-32s %s\n" % ('CUDA_IDS', dict_survey_configuration_default_values['CUDA_IDS']))
+                f.write("%-35s %s\n" % ('PRESTO', dict_survey_configuration_default_values['PRESTO']))
+                f.write("%-35s %s\n" % ('PRESTO_GPU', dict_survey_configuration_default_values['PRESTO_GPU']))
+                f.write("%-35s %s\n" % ('USE_CUDA', dict_survey_configuration_default_values['USE_CUDA']))
+                f.write("%-35s %s\n" % ('CUDA_IDS', dict_survey_configuration_default_values['CUDA_IDS']))
                 f.write("\n")
                 f.write("# Core search parameters\n")
-                f.write("%-32s %s\n" % ('DM_MIN', dict_survey_configuration_default_values['DM_MIN']))
-                f.write("%-32s %s\n" % ('DM_MAX', dict_survey_configuration_default_values['DM_MAX']))
-                f.write("%-32s %s\n" % ('DM_COHERENT_DEDISPERSION', dict_survey_configuration_default_values['DM_COHERENT_DEDISPERSION']))
-                f.write("%-32s %s\n" % ('N_SUBBANDS', dict_survey_configuration_default_values['N_SUBBANDS']))
+                f.write("%-35s %s\n" % ('DM_MIN', dict_survey_configuration_default_values['DM_MIN']))
+                f.write("%-35s %s\n" % ('DM_MAX', dict_survey_configuration_default_values['DM_MAX']))
+                f.write("%-35s %s\n" % ('DM_COHERENT_DEDISPERSION', dict_survey_configuration_default_values['DM_COHERENT_DEDISPERSION']))
+                f.write("%-35s %s\n" % ('N_SUBBANDS', dict_survey_configuration_default_values['N_SUBBANDS']))
                 f.write("\n")
-                f.write("%-32s %s\n" % ('PERIOD_TO_SEARCH_MIN', dict_survey_configuration_default_values['PERIOD_TO_SEARCH_MIN']))
-                f.write("%-32s %s\n" % ('PERIOD_TO_SEARCH_MAX', dict_survey_configuration_default_values['PERIOD_TO_SEARCH_MAX']))
+                f.write("%-35s %s\n" % ('ZAP_ISOLATED_PULSARS_FROM_FFTS', dict_survey_configuration_default_values['ZAP_ISOLATED_PULSARS_FROM_FFTS']))
+                f.write("%-35s %s\n" % ('ZAP_ISOLATED_PULSARS_MAX_HARM', dict_survey_configuration_default_values['ZAP_ISOLATED_PULSARS_MAX_HARM']))
                 f.write("\n")
-                f.write("%-32s %s\n" % ('LIST_SEGMENTS', dict_survey_configuration_default_values['LIST_SEGMENTS']))
-                f.write("%-32s %s\n" % ('ACCELSEARCH_LIST_ZMAX', dict_survey_configuration_default_values['ACCELSEARCH_LIST_ZMAX']))
-                f.write("%-32s %s\n" % ('ACCELSEARCH_NUMHARM', dict_survey_configuration_default_values['ACCELSEARCH_NUMHARM']))
-                f.write("%-32s %s\n" % ('JERKSEARCH_ZMAX', dict_survey_configuration_default_values['JERKSEARCH_ZMAX']))
-                f.write("%-32s %s\n" % ('JERKSEARCH_WMAX', dict_survey_configuration_default_values['JERKSEARCH_WMAX']))
-                f.write("%-32s %s\n" % ('JERKSEARCH_NUMHARM', dict_survey_configuration_default_values['JERKSEARCH_NUMHARM']))
-                f.write("%-32s %s\n" % ('JERKSEARCH_NCPUS', dict_survey_configuration_default_values['JERKSEARCH_NCPUS']))
+                f.write("%-35s %s\n" % ('PERIOD_TO_SEARCH_MIN', dict_survey_configuration_default_values['PERIOD_TO_SEARCH_MIN']))
+                f.write("%-35s %s\n" % ('PERIOD_TO_SEARCH_MAX', dict_survey_configuration_default_values['PERIOD_TO_SEARCH_MAX']))
+                f.write("\n")
+                f.write("%-35s %s\n" % ('LIST_SEGMENTS', dict_survey_configuration_default_values['LIST_SEGMENTS']))
+                f.write("%-35s %s\n" % ('ACCELSEARCH_LIST_ZMAX', dict_survey_configuration_default_values['ACCELSEARCH_LIST_ZMAX']))
+                f.write("%-35s %s\n" % ('ACCELSEARCH_NUMHARM', dict_survey_configuration_default_values['ACCELSEARCH_NUMHARM']))
+                f.write("%-35s %s\n" % ('JERKSEARCH_ZMAX', dict_survey_configuration_default_values['JERKSEARCH_ZMAX']))
+                f.write("%-35s %s\n" % ('JERKSEARCH_WMAX', dict_survey_configuration_default_values['JERKSEARCH_WMAX']))
+                f.write("%-35s %s\n" % ('JERKSEARCH_NUMHARM', dict_survey_configuration_default_values['JERKSEARCH_NUMHARM']))
+                f.write("%-35s %s\n" % ('JERKSEARCH_NCPUS', dict_survey_configuration_default_values['JERKSEARCH_NCPUS']))
                 
                 f.write("\n")
                 f.write("# RFIFIND parameters\n")
-                f.write("%-32s %s\n" % ('RFIFIND_TIME', dict_survey_configuration_default_values['RFIFIND_TIME']))
-                f.write("%-32s %s\n" % ('RFIFIND_FREQSIG', dict_survey_configuration_default_values['RFIFIND_FREQSIG']))
-                f.write("%-32s %s\n" % ('RFIFIND_TIMESIG', dict_survey_configuration_default_values['RFIFIND_TIMESIG']))
-                f.write("%-32s %s\n" % ('RFIFIND_INTFRAC', dict_survey_configuration_default_values['RFIFIND_INTFRAC']))
-                f.write("%-32s %s\n" % ('RFIFIND_CHANFRAC', dict_survey_configuration_default_values['RFIFIND_CHANFRAC']))
-                f.write("%-32s %s\n" % ('RFIFIND_CHANS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_CHANS_TO_ZAP']))
-                f.write("%-32s %s\n" % ('RFIFIND_TIME_INTERVALS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_TIME_INTERVALS_TO_ZAP']))
-                f.write("%-32s %s\n" % ('IGNORECHAN_LIST', dict_survey_configuration_default_values['IGNORECHAN_LIST']))
+                f.write("%-35s %s\n" % ('RFIFIND_TIME', dict_survey_configuration_default_values['RFIFIND_TIME']))
+                f.write("%-35s %s\n" % ('RFIFIND_FREQSIG', dict_survey_configuration_default_values['RFIFIND_FREQSIG']))
+                f.write("%-35s %s\n" % ('RFIFIND_TIMESIG', dict_survey_configuration_default_values['RFIFIND_TIMESIG']))
+                f.write("%-35s %s\n" % ('RFIFIND_INTFRAC', dict_survey_configuration_default_values['RFIFIND_INTFRAC']))
+                f.write("%-35s %s\n" % ('RFIFIND_CHANFRAC', dict_survey_configuration_default_values['RFIFIND_CHANFRAC']))
+                f.write("%-35s %s\n" % ('RFIFIND_CHANS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_CHANS_TO_ZAP']))
+                f.write("%-35s %s\n" % ('RFIFIND_TIME_INTERVALS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_TIME_INTERVALS_TO_ZAP']))
+                f.write("%-35s %s\n" % ('IGNORECHAN_LIST', dict_survey_configuration_default_values['IGNORECHAN_LIST']))
                 f.write("\n")
                 f.write("# Additional flags for all the PRESTO routines\n")
-                f.write("%-32s %s\n" % ('RFIFIND_FLAGS', dict_survey_configuration_default_values['RFIFIND_FLAGS']))
-                f.write("%-32s %s\n" % ('PREPDATA_FLAGS', dict_survey_configuration_default_values['PREPDATA_FLAGS']))
-                f.write("%-32s %s\n" % ('PREPSUBBAND_FLAGS', dict_survey_configuration_default_values['PREPSUBBAND_FLAGS']))
-                f.write("%-32s %s\n" % ('REALFFT_FLAGS', dict_survey_configuration_default_values['REALFFT_FLAGS']))
-                f.write("%-32s %s\n" % ('REDNOISE_FLAGS', dict_survey_configuration_default_values['REDNOISE_FLAGS']))
-                f.write("%-32s %s\n" % ('ACCELSEARCH_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_FLAGS']))
-                f.write("%-32s %s\n" % ('ACCELSEARCH_GPU_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_GPU_FLAGS']))
-                f.write("%-32s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
+                f.write("%-35s %s\n" % ('RFIFIND_FLAGS', dict_survey_configuration_default_values['RFIFIND_FLAGS']))
+                f.write("%-35s %s\n" % ('PREPDATA_FLAGS', dict_survey_configuration_default_values['PREPDATA_FLAGS']))
+                f.write("%-35s %s\n" % ('PREPSUBBAND_FLAGS', dict_survey_configuration_default_values['PREPSUBBAND_FLAGS']))
+                f.write("%-35s %s\n" % ('REALFFT_FLAGS', dict_survey_configuration_default_values['REALFFT_FLAGS']))
+                f.write("%-35s %s\n" % ('REDNOISE_FLAGS', dict_survey_configuration_default_values['REDNOISE_FLAGS']))
+                f.write("%-35s %s\n" % ('ACCELSEARCH_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_FLAGS']))
+                f.write("%-35s %s\n" % ('ACCELSEARCH_GPU_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_GPU_FLAGS']))
+                f.write("%-35s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
                 f.write("\n")
-                f.write("%-32s %s\n" % ('FLAG_REMOVE_FFTFILES', dict_survey_configuration_default_values['FLAG_REMOVE_FFTFILES']))
-                f.write("%-32s %s\n" % ('SIFTING_FLAG_REMOVE_DUPLICATES', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DUPLICATES']))
-                f.write("%-32s %s\n" % ('SIFTING_FLAG_REMOVE_DM_PROBLEMS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DM_PROBLEMS']))
-                f.write("%-32s %s\n" % ('SIFTING_FLAG_REMOVE_HARMONICS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_HARMONICS']))
-                f.write("%-32s %s\n" % ('SIFTING_MINIMUM_NUM_DMS', dict_survey_configuration_default_values['SIFTING_MINIMUM_NUM_DMS']))
-                f.write("%-32s %s\n" % ('SIFTING_MINIMUM_DM', dict_survey_configuration_default_values['SIFTING_MINIMUM_DM']))
-                f.write("%-32s %s\n" % ('SIFTING_SIGMA_THRESHOLD', dict_survey_configuration_default_values['SIFTING_SIGMA_THRESHOLD']))
+                f.write("%-35s %s\n" % ('FLAG_REMOVE_FFTFILES', dict_survey_configuration_default_values['FLAG_REMOVE_FFTFILES']))
+                f.write("%-35s %s\n" % ('SIFTING_FLAG_REMOVE_DUPLICATES', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DUPLICATES']))
+                f.write("%-35s %s\n" % ('SIFTING_FLAG_REMOVE_DM_PROBLEMS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DM_PROBLEMS']))
+                f.write("%-35s %s\n" % ('SIFTING_FLAG_REMOVE_HARMONICS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_HARMONICS']))
+                f.write("%-35s %s\n" % ('SIFTING_MINIMUM_NUM_DMS', dict_survey_configuration_default_values['SIFTING_MINIMUM_NUM_DMS']))
+                f.write("%-35s %s\n" % ('SIFTING_MINIMUM_DM', dict_survey_configuration_default_values['SIFTING_MINIMUM_DM']))
+                f.write("%-35s %s\n" % ('SIFTING_SIGMA_THRESHOLD', dict_survey_configuration_default_values['SIFTING_SIGMA_THRESHOLD']))
                 f.write("\n")
-                f.write("%-32s %s\n" % ('FLAG_FOLD_TIMESERIES', dict_survey_configuration_default_values['FLAG_FOLD_TIMESERIES']))
-                f.write("%-32s %s\n" % ('FLAG_FOLD_RAWDATA', dict_survey_configuration_default_values['FLAG_FOLD_RAWDATA']))
-                f.write("%-32s %s\n" % ('NUM_SIMULTANEOUS_FOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_FOLDS']))
+                f.write("%-35s %s\n" % ('FLAG_FOLD_KNOWN_PULSARS', dict_survey_configuration_default_values['FLAG_FOLD_KNOWN_PULSARS']))
+                f.write("%-35s %s\n" % ('FLAG_FOLD_TIMESERIES', dict_survey_configuration_default_values['FLAG_FOLD_TIMESERIES']))
+                f.write("%-35s %s\n" % ('FLAG_FOLD_RAWDATA', dict_survey_configuration_default_values['FLAG_FOLD_RAWDATA']))
+                f.write("%-35s %s\n" % ('NUM_SIMULTANEOUS_FOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_FOLDS']))
                 f.write("\n")
                 f.write("# PIPELINE STEPS TO EXECUTE (1=do, 0=skip)\n")
-                f.write("%-32s %s\n" % ('STEP_RFIFIND', dict_survey_configuration_default_values['STEP_RFIFIND']))
-                f.write("%-32s %s\n" % ('STEP_ZAPLIST', dict_survey_configuration_default_values['STEP_ZAPLIST']))
-                f.write("%-32s %s\n" % ('STEP_DEDISPERSE', dict_survey_configuration_default_values['STEP_DEDISPERSE']))
-                f.write("%-32s %s\n" % ('STEP_REALFFT', dict_survey_configuration_default_values['STEP_REALFFT']))
-                f.write("%-32s %s\n" % ('STEP_PERIODICITY_SEARCH', dict_survey_configuration_default_values['STEP_PERIODICITY_SEARCH']))
-                f.write("%-32s %s\n" % ('STEP_SIFTING', dict_survey_configuration_default_values['STEP_SIFTING']))
-                f.write("%-32s %s\n" % ('STEP_FOLDING', dict_survey_configuration_default_values['STEP_FOLDING']))
-                #f.write("%-32s %s\n" % ('', dict_survey_configuration_default_values['']))
+                f.write("%-35s %s\n" % ('STEP_RFIFIND', dict_survey_configuration_default_values['STEP_RFIFIND']))
+                f.write("%-35s %s\n" % ('STEP_ZAPLIST', dict_survey_configuration_default_values['STEP_ZAPLIST']))
+                f.write("%-35s %s\n" % ('STEP_DEDISPERSE', dict_survey_configuration_default_values['STEP_DEDISPERSE']))
+                f.write("%-35s %s\n" % ('STEP_REALFFT', dict_survey_configuration_default_values['STEP_REALFFT']))
+                f.write("%-35s %s\n" % ('STEP_PERIODICITY_SEARCH', dict_survey_configuration_default_values['STEP_PERIODICITY_SEARCH']))
+                f.write("%-35s %s\n" % ('STEP_SIFTING', dict_survey_configuration_default_values['STEP_SIFTING']))
+                f.write("%-35s %s\n" % ('STEP_FOLDING', dict_survey_configuration_default_values['STEP_FOLDING']))
+                #f.write("%-35s %s\n" % ('', dict_survey_configuration_default_values['']))
 
         print
         print "Default configuration written onto '%s'." % (default_cfg_filename)
@@ -1647,8 +1795,10 @@ def init_default(observation_filename):
                 f.write("50.00    0.08      3     1     0\n")
         print "Some common birdies written on 'common_birdies.txt'."
         print
+        print "Place the parfiles of the already-known pulsars, if any, in 'known_pulsars'"
+        print
         print "Now edit the config file, adjust the parameters and run the pipeline with:"
-        print "%s -config %s -obs <myobservation>" % (os.path.basename(sys.argv[0]), default_cfg_filename)
+        print "%s -config %s -obs %s" % (os.path.basename(sys.argv[0]), default_cfg_filename, default_obs)
         print
         exit()
 
@@ -1705,8 +1855,8 @@ else:
 if verbosity_level >= 1:
         print
         print "#"*62
-        print "#" + " "*23 + "%s" % ("PULSAR MINER") + " "*24 + "#"
-        print "#" + " "*22 + "%s" % (string_version) + " "*23 + "#"
+        print "#" + " "*24 + "%s" % ("PULSAR MINER") + " "*24 + "#"
+        print "#" + " "*23 + "%s" % (string_version) + " "*22 + "#"
         print "#"*62
         print
 
@@ -1726,7 +1876,7 @@ elif obsname!="":
         config.folder_datafiles           = os.path.dirname(os.path.abspath(obsname))   # ...the location of the input file is the location of all the data
 
 
-        
+
 # Now create the list of observations to search with their absolute paths
 config.list_datafiles_abspath     = [os.path.join(config.folder_datafiles, x) for x in config.list_datafiles]
 
@@ -1737,13 +1887,44 @@ config.list_Observations          = [Observation(x, config.data_type) for x in c
 config.file_common_birdies = os.path.join(config.root_workdir, "common_birdies.txt")
 
 
+################################################################################
+#   IMPORT PARFILES OF KNOWN PULSARS
+################################################################################
+
+dir_known_pulsars = os.path.join(config.root_workdir, "known_pulsars")
+
+list_known_pulsars = []
+if os.path.exists(dir_known_pulsars):
+        list_parfilenames = sorted(glob.glob("%s/*.par" % dir_known_pulsars))
+        dict_freqs_to_zap = {}
+
+        
+        for k in range(len(list_parfilenames)):
+                current_pulsar = Pulsar(list_parfilenames[k])
+                list_known_pulsars.append(current_pulsar)
+                
+                if not current_pulsar.is_binary:
+                        current_freq = psr_utils.calc_freq( config.list_Observations[0].Tstart_MJD, current_pulsar.PEPOCH, current_pulsar.F0, current_pulsar.F1, current_pulsar.F2   )
+                        dict_freqs_to_zap[current_pulsar.psr_name] = current_freq
+
+                if verbosity_level >= 1:
+                        print "Reading '%s' --> Added %s to the list of known pulsars (%s)" % (os.path.basename(list_parfilenames[k]), current_pulsar.psr_name, current_pulsar.pulsar_type )
+
+        if verbosity_level >= 1:
+                if config.zap_isolated_pulsars_from_ffts == 1:
+                        print
+                        print
+                        print "WARNING: I will zap the Fourier frequencies of the isolated pulsars (up to the %d-th harmonic), namely" % (config.zap_isolated_pulsars_max_harm)
+                        print
+                        for key in sorted(dict_freqs_to_zap.keys()):
+                                print "%s  -->  Barycentric frequency at the epoch of the observation: %.14f Hz" % (key, dict_freqs_to_zap[key])
+                        print
+
 for seg in config.list_segments_nofull:
         if (np.float(seg)*60) > config.list_Observations[0].T_obs_s:
                 print "Segment %d minutes > length of obs (%d minutes)" % (np.float(seg), config.list_Observations[0].T_obs_s/60.)
                 config.list_segments_nofull.remove(seg)
                 config.list_segments.remove(seg)
-                print "config.list_segments_nofull = ", config.list_segments_nofull
-                print "config.list_segments        = ", config.list_segments
 
         
 
@@ -2004,7 +2185,7 @@ if config.flag_step_zaplist == 1:
                 time.sleep(0.1)
                 print "Making zaplist of 0-DM topocentric time series \"%s\"..." % (os.path.basename(config.list_0DM_datfiles[i])), ; sys.stdout.flush() 
                 LOG_basename = "02d_makezaplist_%s" % (os.path.basename(config.list_0DM_fft_rednoise_files[i]))
-                make_zaplist(config.list_0DM_fft_rednoise_files[i],
+                zaplist_filename = make_zaplist(config.list_0DM_fft_rednoise_files[i],
                                                        dir_birdies,
                                                        LOG_basename,
                                                        config.file_common_birdies,
@@ -2016,6 +2197,20 @@ if config.flag_step_zaplist == 1:
                 if verbosity_level >= 1:
                         print "done!"; sys.stdout.flush()
 
+                if config.zap_isolated_pulsars_from_ffts == 1:
+                        fourier_bin_size =  1./config.list_Observations[0].T_obs_s
+                        zaplist_file = open(zaplist_filename, 'a')
+
+                        zaplist_file.write("########################################\n")
+                        zaplist_file.write("#              KNOWN PULSARS           #\n")
+                        zaplist_file.write("########################################\n")
+                        for psr in sorted(dict_freqs_to_zap.keys()):
+                                zaplist_file.write("# Pulsar %s \n" % (psr))
+                                for i_harm in range(1, config.zap_isolated_pulsars_max_harm+1):
+                                        zaplist_file.write("B%21.14f   %19.17f\n" % (dict_freqs_to_zap[psr]*i_harm, fourier_bin_size*i_harm))
+                        zaplist_file.close()
+
+
 
 dir_dedispersion = os.path.join(config.root_workdir, "03_DEDISPERSION")
 if config.flag_step_dedisperse == 1:
@@ -2023,7 +2218,7 @@ if config.flag_step_dedisperse == 1:
                 print
                 print
                 print "##################################################################################################"
-                print "# 3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH"
+                print "#                 STEP 3 - DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH"
                 print "##################################################################################################"
                 print
         
@@ -2158,7 +2353,7 @@ if config.flag_step_dedisperse == 1:
 if config.flag_step_sifting == 1:
         print
         print "##################################################################################################"
-        print "# 4) CANDIDATE SIFTING "
+        print "#                                  STEP 4 - CANDIDATE SIFTING "
         print "##################################################################################################"
 
 
@@ -2173,6 +2368,7 @@ if config.flag_step_sifting == 1:
 
         for i in range(len(config.list_Observations)):
                 obs = config.list_Observations[i].file_basename
+                
                 if verbosity_level >= 2:     print "Sifting candidates for observation %3d/%d '%s'." % (i+1, len(config.list_Observations), obs) 
                 for seg in sorted(config.dict_search_structure[obs].keys()):
                         work_dir_segment = os.path.join(dir_sifting, config.list_Observations[i].file_basename, "%s" % seg)
@@ -2194,8 +2390,8 @@ if config.flag_step_sifting == 1:
 
 
                                 if verbosity_level >= 1:
-                                        print "4) CANDIDATE SIFTING: Adding file %d) \"%s\" / %s / %s  to the queue..." % (i+1, obs, seg, ck), ; sys.stdout.flush()
-                                if verbosity_level >= 1:        print "done!"
+                                        print "4) CANDIDATE SIFTING: Sifting observation %d) \"%s\" / %s / %s..." % (i+1, obs, seg, ck), ; sys.stdout.flush()
+
 
 
                                 config.dict_search_structure[obs][seg][ck]['candidates'] = sift_candidates( work_dir_chunk,
@@ -2216,16 +2412,83 @@ if config.flag_step_sifting == 1:
                                                                                                             config.period_to_search_max
                                 ) 
 
+
+
+
+        for i in range(len(config.list_Observations)):
+                candidates_summary_filename = "%s/%s_cands.summary" % (dir_sifting, config.list_Observations[i].file_basename)
+                candidates_summary_file = open(candidates_summary_filename, 'w')
+
+                count_candidates_to_fold_all = 0
+                candidates_summary_file.write("\n*****************************************************************")
+                candidates_summary_file.write("\nCandidates found in %s:\n\n" % (config.list_Observations[i].file_nameonly))
+                for seg in sorted(config.dict_search_structure[obs].keys()):
+                        for ck in sorted(config.dict_search_structure[obs][seg].keys()):
+                                Ncands_seg_ck = len(config.dict_search_structure[obs][seg][ck]['candidates'])
+                                candidates_summary_file.write("%20s  |  %10s  ---> %4d candidates\n" % (seg, ck, Ncands_seg_ck))
+                                count_candidates_to_fold_all = count_candidates_to_fold_all + Ncands_seg_ck
+                candidates_summary_file.write("\nTOT = %d candidates\n" % (count_candidates_to_fold_all))
+                candidates_summary_file.write("*****************************************************************\n\n")
+
+
+                count_candidates_to_fold_redet = 0
+                count_candidates_to_fold_new = 0
+                list_all_cands = []
+                for seg in sorted(config.dict_search_structure[obs].keys()):
+                        for ck in sorted(config.dict_search_structure[obs][seg].keys()):
+                                config.dict_search_structure[obs][seg][ck]['candidates_redetections'] = []
+                                config.dict_search_structure[obs][seg][ck]['candidates_new'] = []
+                
+                                for j in range(len(config.dict_search_structure[obs][seg][ck]['candidates'])):
+                                        candidate = config.dict_search_structure[obs][seg][ck]['candidates'][j]
+
+                                        flag_is_know, known_psrname, str_harmonic = check_if_cand_is_known(candidate, list_known_pulsars, numharm=16)
+
+                                        
+                                        if flag_is_know == True:
+                                                config.dict_search_structure[obs][seg][ck]['candidates_redetections'].append(candidate)
+                                                count_candidates_to_fold_redet = count_candidates_to_fold_redet +1
+                                        elif flag_is_know == False:
+                                                config.dict_search_structure[obs][seg][ck]['candidates_new'].append(candidate)
+                                                count_candidates_to_fold_new = count_candidates_to_fold_new + 1
+                                                
+                                        dict_cand = {'cand': candidate, 'obs': obs, 'seg': seg, 'ck': ck, 'is_known': flag_is_know, 'known_psrname': known_psrname, 'str_harmonic': str_harmonic }
+                                        list_all_cands.append(dict_cand)
+                N_cands_all = len(list_all_cands)
+                
+                for i_cand, dict_cand in zip(range(0, N_cands_all), sorted(list_all_cands, key=lambda k: k['cand'].p, reverse=False)):
+                        if dict_cand['cand'].DM < 2:
+                                candidates_summary_file.write("Cand %4d/%d: %12.6f ms    |  DM: %7.2f pc cm-3    (%4s / %4s)  ---> Likely RFI\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'] ))
+                        else:
+                                if dict_cand['is_known'] == True:
+                                        candidates_summary_file.write("Cand %4d/%d:  %12.6f ms  |  DM: %7.2f pc cm-3    (%4s / %4s)  ---> Likely %s - %s\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'], dict_cand['known_psrname'], dict_cand['str_harmonic']))
+                                elif dict_cand['is_known'] == False:
+                                        candidates_summary_file.write("Cand %4d/%d:  %12.6f ms  |  DM: %7.2f pc cm-3    (%4s / %4s)\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck']))
+
+                
+                candidates_summary_file.close()
+                
+                if verbosity_level >= 1:
+                        candidates_summary_file = open(candidates_summary_filename, 'r')
+                        for line in candidates_summary_file:
+                                print line,
+                        candidates_summary_file.close()
+
+
+
+        
                                 
 
 if config.flag_step_folding == 1:
+        print
+        print
         print "##################################################################################################"
-        print "# 5) FOLDING "
+        print "#                                       STEP 5 - FOLDING "
         print "##################################################################################################"
         print
 
         dir_folding = os.path.join(config.root_workdir, "05_FOLDING")
-        if verbosity_level >= 1: print "5) FOLDING: creating working directories...",; sys.stdout.flush()
+        if verbosity_level >= 1: print "5) FOLDING: Creating working directories...",; sys.stdout.flush()
         if not os.path.exists(dir_folding):
                 os.mkdir(dir_folding)
         if verbosity_level >= 1: print "done!"
@@ -2241,43 +2504,41 @@ if config.flag_step_folding == 1:
                         os.mkdir(work_dir_candidate_folding)
                 if verbosity_level >= 1:   print "done!"
                 
-                count_candidates_to_fold = 0
-                if verbosity_level >= 1:
-                        print
-                        print "*****************************************************************"
-                        print "Candidates found:"
-
-                for seg in sorted(config.dict_search_structure[obs].keys()):
-                        for ck in sorted(config.dict_search_structure[obs][seg].keys()):
-                                Ncands_to_fold = len(config.dict_search_structure[obs][seg][ck]['candidates'])
-                                if verbosity_level >= 1:
-                                        print "%20s  |  %10s  ---> %4d candidates" % (seg, ck, Ncands_to_fold)
-                                count_candidates_to_fold = count_candidates_to_fold + Ncands_to_fold
-                print
-                print "TOT = %d candidates" % (count_candidates_to_fold)
-                print "*****************************************************************"
 
                 file_script_fold_name = "script_fold.txt"
                 file_script_fold_abspath = "%s/%s" % (work_dir_candidate_folding, file_script_fold_name)
                 file_script_fold = open(file_script_fold_abspath, "w")
                 file_script_fold.close()
-                
+
+                if config.flag_fold_known_pulsars == 1:
+                        key_cands_to_fold = 'candidates'
+                        if verbosity_level >= 1:
+                                print
+                                print "5) CANDIDATE FOLDING: I will fold all the %d candidates (%s likely redetections included)" % (N_cands_all, count_candidates_to_fold_redet)
+                        N_cands_to_fold = N_cands_all
+                        
+                elif config.flag_fold_known_pulsars == 0:
+                        key_cands_to_fold = 'candidates_new'
+                        if verbosity_level >= 1:
+                                print
+                                print "5) CANDIDATE FOLDING: I will fold only the %d putative new pulsars (%s likely redetections will not be folded)" % (count_candidates_to_fold_new, count_candidates_to_fold_redet)
+                        N_cands_to_fold = count_candidates_to_fold_new
                 count_folded_ts = 1 
                 if config.flag_fold_timeseries == 1:
                         
                         LOG_basename = "05_folding_%s_timeseries" % (obs)
                         if verbosity_level >= 1:
                                 print
-                                print "Folding time series"
+                                print "Folding time series..."
                                 print 
                                 print "\033[1m >> TIP:\033[0m Follow folding progress with '\033[1mtail -f %s/LOG_%s.txt\033[0m'" % (LOG_dir, LOG_basename)
                                 print
                         for seg in sorted(config.dict_search_structure[obs].keys()):
                                 for ck in sorted(config.dict_search_structure[obs][seg].keys()):
-                                        for j in range(len(config.dict_search_structure[obs][seg][ck]['candidates'])):
-                                                candidate = config.dict_search_structure[obs][seg][ck]['candidates'][j]
+                                        for j in range(len(config.dict_search_structure[obs][seg][ck][key_cands_to_fold])):
+                                                candidate = config.dict_search_structure[obs][seg][ck][key_cands_to_fold][j]
                                         
-                                                print "FOLDING CANDIDATE TIMESERIES %d/%d of %s: seg %s / %s..." % (count_folded_ts, count_candidates_to_fold, obs, seg, ck), ; sys.stdout.flush()
+                                                print "FOLDING CANDIDATE TIMESERIES %d/%d of %s: seg %s / %s..." % (count_folded_ts, N_cands_to_fold, obs, seg, ck), ; sys.stdout.flush()
                                                 tstart_folding_cand_ts = time.time()
 
                                                 fold_candidate(work_dir_candidate_folding,  
@@ -2314,8 +2575,8 @@ if config.flag_step_folding == 1:
                                 #print "FOLD_RAW = %s of %s" % (seg, sorted(config.dict_search_structure[obs].keys(), reverse=True))
                                 
                                 for ck in sorted(config.dict_search_structure[obs][seg].keys()):
-                                        for j in range(len(config.dict_search_structure[obs][seg][ck]['candidates'])):
-                                                candidate = config.dict_search_structure[obs][seg][ck]['candidates'][j]
+                                        for j in range(len(config.dict_search_structure[obs][seg][ck][key_cands_to_fold])):
+                                                candidate = config.dict_search_structure[obs][seg][ck][key_cands_to_fold][j]
                                                 LOG_basename = "05_folding_%s_%s_%s_rawdata" % (obs, seg, ck)
                                                 
 

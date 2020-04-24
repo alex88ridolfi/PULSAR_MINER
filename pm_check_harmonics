@@ -45,9 +45,9 @@ def check_if_already_known(P_cand_ms, numharm):
 numharm = 16
 flag_foldall = 0
 string_nosearch = ""
-#ARGOMENTI DA SHELL
+#SHELL ARGUMENTS
 if (len(sys.argv) == 1):
-        print "USAGE: %s -cand [Pms] " % (os.path.basename(sys.argv[0]))
+        print "USAGE: %s -cand [Pms] [-numharm 16]" % (os.path.basename(sys.argv[0]))
         exit()
 else:
         for j in range( 1, len(sys.argv)):
@@ -55,6 +55,9 @@ else:
                         list_P_cand_ms = np.array( [np.float(x) for x in sys.argv[j+1].split(",")])
                         print "list_P_cand_ms = ", list_P_cand_ms
 
+                if (sys.argv[j] == "-numharm"):
+                        numharm = int(sys.argv[j+1])
+                        
 for i in range(len(list_P_cand_ms)):
     P_cand_ms = list_P_cand_ms[i]
 
