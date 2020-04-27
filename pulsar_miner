@@ -19,7 +19,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.1 (24Apr2020)"
+string_version = "1.1.1 (27Apr2020)"
 
 
 class Pulsar(object):
@@ -53,53 +53,50 @@ class Pulsar(object):
                 if self.is_binary:
                         self.pulsar_type = "binary"
                         self.binary_model    = pulsar_parfile.BINARY
-                        
-                        if self.binary_model == 'BT' or self.binary_model == 'DD':
-                                self.binary_model    = pulsar_parfile.BINARY
+
+                        # 1) Orbital period
+                        if hasattr(pulsar_parfile, 'PB'):
                                 self.Pb_d            = pulsar_parfile.PB
                                 self.Pb_s            = self.Pb_d*86400
                                 self.Fb0             = 1./self.Pb_s
-                                self.x_p_lts         = pulsar_parfile.A1
-                                self.x_p_cm          = pulsar_parfile.A1 * LIGHT_SPEED
+                        elif hasattr(pulsar_parfile, 'FB0'):
+                                self.Fb0       = pulsar_parfile.FB0
+                                self.Pb_s      = 1./self.Fb0
+                                self.Pb_d      = self.Pb_s / 86400.
 
-                                if hasattr(pulsar_parfile, 'E'):
-                                        self.ecc  = pulsar_parfile.E
-                                elif hasattr(pulsar_parfile, 'ECC'):
-                                        self.ecc  = pulsar_parfile.ECC
-                                        
-                                self.omega_p_deg  = pulsar_parfile.OM
-                                self.omega_p_rad  = pulsar_parfile.OM * np.pi/180
-                                self.T0           = pulsar_parfile.T0
+                        # 2) Projected semi-major axis of the pulsar orbit
+                        self.x_p_lts           = pulsar_parfile.A1
+                        self.x_p_cm            = pulsar_parfile.A1 * LIGHT_SPEED
 
-                        elif self.binary_model == 'ELL1':
-                                self.Pb_d      = pulsar_parfile.PB
-				self.Pb_s      = self.Pb_d*86400
-	                        self.Fb0       = 1./self.Pb_s
-                                self.x_p_lts   = pulsar_parfile.A1
-                                self.x_p_cm    = pulsar_parfile.A1 * LIGHT_SPEED
-
+                        # 3) Orbital eccentricity
+                        if hasattr(pulsar_parfile, 'E'):
+                                self.ecc       = pulsar_parfile.E
+                        elif hasattr(pulsar_parfile, 'ECC'):
+                                self.ecc       = pulsar_parfile.ECC
+                        elif hasattr(pulsar_parfile, 'EPS1') and hasattr(pulsar_parfile, 'EPS2'):
                                 self.eps1      = pulsar_parfile.EPS1
                                 self.eps2      = pulsar_parfile.EPS2
-                                self.ecc       = np.sqrt(self.eps1**2  + self.eps2**2)
+				self.ecc       = np.sqrt(self.eps1**2  + self.eps2**2)
+                        else:
+                                self.ecc       = 0 
                                 
-                    	        self.T0           = pulsar_parfile.TASC
+                        # 4) Longitude of periastron
+                        if hasattr(pulsar_parfile, 'OM'):
+                                self.omega_p_deg  = pulsar_parfile.OM
+                        else:
+                                self.omega_p_deg  = 0
+                        self.omega_p_rad  = self.omega_p_deg * np.pi/180
+
+
+                        # 5) Epoch of passage at periastron/ascending node
+                        if hasattr(pulsar_parfile, 'T0'):
+                                self.T0           = pulsar_parfile.T0
+                                self.Tasc         = self.T0
+                        elif hasattr(pulsar_parfile, 'TASC'):
                                 self.Tasc         = pulsar_parfile.TASC
+                                self.T0           = self.Tasc
 
-                        elif self.binary_model == 'BTX':
-                                self.Fb0       = pulsar_parfile.FB0
-				self.Pb_s      = 1./self.Fb0
-                                self.Pb_d      = self.Pb_s / 86400.
-                                self.x_p_lts   = pulsar_parfile.A1
-                                self.x_p_cm    = pulsar_parfile.A1 * LIGHT_SPEED
-                                if hasattr(pulsar_parfile, 'E'):
-		                        self.ecc  = pulsar_parfile.E
-				elif hasattr(pulsar_parfile, 'ECC'):
-				        self.ecc  = pulsar_parfile.ECC
-                    	        self.T0           = pulsar_parfile.T0
-                                self.Tasc         = pulsar_parfile.T0
-
-                                        
-
+                                
                         self.v_los_max = (2*np.pi * self.x_p_cm / self.Pb_s)
                         self.doppler_factor = self.v_los_max / LIGHT_SPEED
 

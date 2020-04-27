@@ -1,17 +1,23 @@
 ******************************
+Version 1.1.1 (27Apr2020)
+
+- Recognition of known binary pulsars now independent of the particular binary model
+
+
+******************************
 Version 1.1 (24Apr2020)
 
-- Introduced recognition of known pulsars in the data and options about their folding
-- All candidates now written onto a summary file in a human-readable format
-- Updated description of JERKSEARCH_WMAX parameter
-- Fixed bug that prevented folding of the time series
-- Some code and output polishing
+ - Introduced recognition of known pulsars in the data and options about their folding
+ - All candidates now written onto a summary file in a human-readable format
+ - Updated description of JERKSEARCH_WMAX parameter
+ - Fixed bug that prevented folding of the time series
+ - Some code and output polishing
 
 
 ******************************
 Version 1.0 (16Apr2020)
 
-- Removed dependency on PyPulsar
+ - Removed dependency on PyPulsar
  - Fixed bug that prevented the code from making an RFIFIND mask by itself
  - Introduced more RFIFIND parameters in the configuration file
  - Warn the user if more than 50% of the frequency channels are masked
@@ -22,4 +28,4 @@ Version 1.0 (16Apr2020)
 ******************************
 Version 1.0-beta (10Apr2020)
 
-- First public release
+ - First public release
