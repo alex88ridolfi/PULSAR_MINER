@@ -1,4 +1,12 @@
 ******************************
+Version 1.1.2 (01May2020)
+
+- Fixed bug that prevented the pipeline from running if STEP_RFIFIND = 0
+- Fixed bug that prevented the removal of the *.fft files even if FLAG_REMOVE_FFTFILES = 1
+- Some output polishing
+
+
+******************************
 Version 1.1.1 (27Apr2020)
 
 - Recognition of known binary pulsars now independent of the particular binary model

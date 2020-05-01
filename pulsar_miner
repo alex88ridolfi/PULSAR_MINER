@@ -19,7 +19,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.1.1 (27Apr2020)"
+string_version = "1.1.2 (01May2020)"
 
 
 class Pulsar(object):
@@ -803,7 +803,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
                 print "periodicity_search_FFT:: presto_env_zmax_0 = ", presto_env_zmax_0
                 print "periodicity_search_FFT:: presto_env_zmax_any = ", presto_env_zmax_any
         
-        
+
         list_files_to_search = sorted([ x for x in glob.glob("%s/*DM*.*.dat" % (work_dir)) if not "red" in x ])
         N_files_to_search = len(list_files_to_search)
         
@@ -831,22 +831,22 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
         zapfile_nameonly = os.path.basename(zapfile)
         for i in range(N_files_to_search):
                 if verbosity_level >= 2:
-                        print "periodicity_search_FFT: inside loop with i = %d / %d" % (i, len(list_files_to_search))
+                        print "periodicity_search_FFT: inside loop with i = %d / %d" % (i, N_files_to_search-1)
                 dat_file = list_files_to_search[i]
                 dat_file_nameonly = os.path.basename(dat_file)
                 fft_file = dat_file.replace(".dat", ".fft")
                 fft_file_nameonly = os.path.basename(fft_file)
                 print
                 if dict_flag_steps['flag_step_realfft'] == 1:
-                        print "File %d/%d - Doing realfft  of %s..." % (i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
+                        print "DM trial %d/%d - Doing realfft  of %s..." % (i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
                         realfft(dat_file, work_dir, LOG_basename, "", presto_env_zmax_0, 0, flag_LOG_append)
                         print "done!" ; sys.stdout.flush()
 
-                        print "File %d/%d - Doing rednoise of %s..." % (i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
+                        print "DM trial %d/%d - Doing rednoise of %s..." % (i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
                         rednoise(fft_file, work_dir, LOG_basename, "", presto_env_zmax_0, verbosity_level)
                         print "done!" ; sys.stdout.flush()
                          
-                        print "File %d/%d - Applying zapfile '%s' to '%s'..." % (i+1, N_files_to_search, zapfile_nameonly, fft_file_nameonly), ; sys.stdout.flush()
+                        print "DM trial %d/%d - Applying zapfile '%s' to '%s'..." % (i+1, N_files_to_search, zapfile_nameonly, fft_file_nameonly), ; sys.stdout.flush()
                         zapped_fft_filename, zapped_inf_filename = zapbirds(fft_file, zapfile, work_dir, LOG_basename, presto_env_zmax_0, verbosity_level)
                         zapped_fft_nameonly = os.path.basename(zapped_fft_filename)
                         print "done!" ; sys.stdout.flush()
@@ -858,7 +858,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
                 if dict_flag_steps['flag_step_periodicity_search'] == 1: 
                         for z in list_zmax:
                                 tstart_accelsearch = time.time() 
-                                print "File %d/%d - Doing accelsearch of %s with zmax = %4d..." % (i+1, N_files_to_search, zapped_fft_nameonly, z), ; sys.stdout.flush()
+                                print "DM trial %d/%d - Doing accelsearch of %s with zmax = %4d..." % (i+1, N_files_to_search, zapped_fft_nameonly, z), ; sys.stdout.flush()
                                 if int(z) == 0:
                                         dict_env = copy.deepcopy(dict_env_zmax_0)
                                         if verbosity_level >= 2:
@@ -889,7 +889,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
 
                         if jerksearch_wmax > 0:
                                 tstart_jerksearch = time.time()
-                                print "File %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (i+1, N_files_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), ; sys.stdout.flush()
+                                print "DM trial %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (i+1, N_files_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), ; sys.stdout.flush()
                                 flag_cuda = ""
                                 jerksearch_flags = other_flags_accelsearch + flag_cuda
                                 jerksearch(fft_file, work_dir, log_abspath, jerksearch_ncpus=jerksearch_ncpus, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
@@ -897,13 +897,13 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
                                 time_taken_jerksearch_s = tend_jerksearch - tstart_jerksearch
                                 print "done in %.2f s!" % (time_taken_jerksearch_s) ; sys.stdout.flush()
                                 ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
-                                
                 if flag_remove_fftfile==1:
-                        print "Removing %s..." % (fft_file_nameonly), ; sys.stdout.flush()
+                        if verbosity_level >= 1:
+                                print "DM trial %d/%d - Removing %s to save disk space..." % (i+1, N_files_to_search, fft_file_nameonly), ; sys.stdout.flush()
                         os.remove(fft_file)
-                        print "...done!"; sys.stdout.flush()
-
-        
+                        if verbosity_level >= 1:
+                                print "done!"; sys.stdout.flush()
+                
 
 
 
@@ -1544,7 +1544,7 @@ class SurveyConfiguration(object):
                         elif key == "REDNOISE_FLAGS":                                self.rednoise_flags                   = self.dict_survey_configuration[key]
                         elif key == "ACCELSEARCH_FLAGS":                             self.accelsearch_flags                = self.dict_survey_configuration[key]
                         elif key == "ACCELSEARCH_GPU_FLAGS":                         self.accelsearch_gpu_flags            = self.dict_survey_configuration[key]
-                        elif key == "FLAG_REMOVE_FFTFILES":                          self.flag_remove_fftfiles             = self.dict_survey_configuration[key]
+                        elif key == "FLAG_REMOVE_FFTFILES":                          self.flag_remove_fftfiles             = int(self.dict_survey_configuration[key])
                         elif key == "USE_CUDA":                                      self.flag_use_cuda                    = int(self.dict_survey_configuration[key])
                         elif key == "CUDA_IDS":                                      self.list_cuda_ids                    = [int(x) for x in self.dict_survey_configuration[key].split(",")]
                         elif key == "LIST_SEGMENTS":                                 self.list_segments                    = self.dict_survey_configuration[key].split(",")
@@ -1849,12 +1849,18 @@ else:
                 elif (sys.argv[j] == "-V"):
                         verbosity_level = 3
 
+                        
 if verbosity_level >= 1:
+        size_logo = 64
+        size_string_version = len(string_version)
+        dsize = int((size_logo - size_string_version)*0.5 - 1)
+        dsize_offset = size_string_version % 2
+        
         print
-        print "#"*62
-        print "#" + " "*24 + "%s" % ("PULSAR MINER") + " "*24 + "#"
-        print "#" + " "*23 + "%s" % (string_version) + " "*22 + "#"
-        print "#"*62
+        print "#"*size_logo
+        print "#" + " "*25 + "%s" % ("PULSAR MINER") + " "*25 + "#"
+        print "#" + " "*(dsize + dsize_offset) + "%s" % (string_version) + " "*dsize + "#"
+        print "#"*size_logo
         print
 
 config                  = SurveyConfiguration(config_filename, verbosity_level)
@@ -1995,16 +2001,19 @@ if verbosity_level >= 1:
         print
 
 
-if config.flag_step_rfifind == 1:
-        rfifind_masks_dir = os.path.join(config.root_workdir, "01_RFIFIND")
 
-        if not os.path.exists(rfifind_masks_dir):         os.mkdir(rfifind_masks_dir)
-        if not os.path.exists(LOG_dir):                   os.mkdir(LOG_dir)
+rfifind_masks_dir = os.path.join(config.root_workdir, "01_RFIFIND")
+
+if not os.path.exists(rfifind_masks_dir):         os.mkdir(rfifind_masks_dir)
+if not os.path.exists(LOG_dir):                   os.mkdir(LOG_dir)
 
 
-        for i in range(len(config.list_Observations)):
-                time.sleep(0.2)
+for i in range(len(config.list_Observations)):
+        time.sleep(0.2)
 
+        config.list_Observations[i].mask = "%s/%s_rfifind.mask" % (rfifind_masks_dir, config.list_Observations[i].file_basename)
+        
+        if config.flag_step_rfifind == 1:
                 LOG_basename = "01_rfifind_%s" % (config.list_Observations[i].file_nameonly)
                 log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
                 if verbosity_level >= 1:
@@ -2012,7 +2021,7 @@ if config.flag_step_rfifind == 1:
                         print
                         print "Creating rfifind mask of observation %3d/%d: '%s'..." % (i+1, len(config.list_Observations), config.list_Observations[i].file_nameonly), ; sys.stdout.flush()
 
-                
+        
                 make_rfifind_mask( config.list_Observations[i].file_abspath,
                                                     rfifind_masks_dir,
                                                     LOG_basename,
@@ -2028,40 +2037,52 @@ if config.flag_step_rfifind == 1:
                                                     verbosity_level
                 )
 
-                config.list_Observations[i].mask = "%s/%s_rfifind.mask" % (rfifind_masks_dir, config.list_Observations[i].file_basename)
+        elif config.flag_step_rfifind == 0:
+                if verbosity_level >= 1:
+                        print "STEP_RFIFIND = %s   ---> I will not create the mask, I will only look for the one already present in the 01_RFIFIND folder" % (config.flag_step_rfifind)
 
-                mask = rfifind.rfifind(config.list_Observations[i].mask)
-                fraction_masked_channels = np.float(len(mask.mask_zap_chans))/mask.nchan
+                if not os.path.exists(config.list_Observations[i].mask):
+                        print
+                        print 
+                        print "\033[1m  ERROR! File '%s' not found! \033[0m" % (config.list_Observations[i].mask)
+                        print
+                        print "You must create a mask for your observation, in order to run the pipeline."
+                        print "Set STEP_RFIFIND = 1 in your configuration file and retry."
+                        print
+                        exit()
+                else:
+                        print
+                        print "File '%s' found! Using it as the mask." % (config.list_Observations[i].mask)
+                
+
+        
+
+        mask = rfifind.rfifind(config.list_Observations[i].mask)
+        fraction_masked_channels = np.float(len(mask.mask_zap_chans))/mask.nchan
+        if verbosity_level >= 1:
+                print
+                print "RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.)
+                print 
+        if fraction_masked_channels > 0.5:
+                print
+                print "************************************************************************************************"
+                print "\033[1m !!! WARNING : %.2f%% of the band was masked! That seems quite a lot! \033[0m !!!" % (fraction_masked_channels * 100.)
+                print "\033[1m !!! You may want to adjust the RFIFIND parameters in the configuration file (e.g. try to increase RFIFIND_FREQSIG) \033[0m"
+                print "************************************************************************************************"
+                time.sleep(10)
+                        
+        weights_file = config.list_Observations[i].mask.replace(".mask", ".weights")
+        if os.path.exists(weights_file):
+                array_weights = np.loadtxt(weights_file, unpack=True, usecols=(0,1,), skiprows=1)
+                config.ignorechan_list = ",".join([ str(x) for x in np.where(array_weights[1] == 0)[0] ])
+                config.nchan_ignored = len(config.ignorechan_list.split(","))
                 if verbosity_level >= 1:
                         print
-                        print "RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.)
-                        print 
-                if fraction_masked_channels > 0.5:
                         print
-                        print "************************************************************************************************"
-                        print "\033[1m !!! WARNING : %.2f%% of the band was masked! That seems quite a lot! \033[1m !!!" % (fraction_masked_channels * 100.)
-                        print "\033[1m !!! You may want to adjust the RFIFIND parameters in the configuration file (e.g. try to increase RFIFIND_FREQSIG) \033[0m"
-                        print "************************************************************************************************"
-                        time.sleep(10)
-                        
-                weights_file = config.list_Observations[i].mask.replace(".mask", ".weights")
-                if os.path.exists(weights_file):
-                        array_weights = np.loadtxt(weights_file, unpack=True, usecols=(0,1,), skiprows=1)
-                        config.ignorechan_list = ",".join([ str(x) for x in np.where(array_weights[1] == 0)[0] ])
-                        config.nchan_ignored = len(config.ignorechan_list.split(","))
-                        if verbosity_level >= 1:
-                                print
-                                print
-                                print "WEIGHTS file '%s' found. Using it to ignore %d channels out of %d (%.2f%%)" % (os.path.basename(weights_file), config.nchan_ignored, config.list_Observations[i].nchan, 100*config.nchan_ignored/np.float(config.list_Observations[i].nchan) )
-                                print "IGNORED CHANNELS: %s" % (config.ignorechan_list)
+                        print "WEIGHTS file '%s' found. Using it to ignore %d channels out of %d (%.2f%%)" % (os.path.basename(weights_file), config.nchan_ignored, config.list_Observations[i].nchan, 100*config.nchan_ignored/np.float(config.list_Observations[i].nchan) )
+                        print "IGNORED CHANNELS: %s" % (config.ignorechan_list)
 
 
-
-                
-else:
-        if verbosity_level >= 1:
-                print "STEP_RFIFIND = %s" % (config.flag_step_rfifind)
-                print "I will skip the RFIFIND step."
 
 
 ##################################################################################################
