@@ -1,4 +1,13 @@
 ******************************
+Version 1.1.3 (05May2020)
+
+- Now the pipeline check whether a DM trial has already been searched and, if so, does not recreate the .fft file
+- Better printouts to keep track of the pipeline progress
+- Fixed bug that caused the pipeline to crash if no valid candidates are found in a given chunk
+- Jerk search and folding of the time series now disabled by default
+
+
+******************************
 Version 1.1.2 (01May2020)
 
 - Fixed bug that prevented the pipeline from running if STEP_RFIFIND = 0

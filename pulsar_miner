@@ -19,7 +19,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.1.2 (01May2020)"
+string_version = "1.1.3 (06May2020)"
 
 
 class Pulsar(object):
@@ -413,11 +413,14 @@ def sift_candidates(work_dir, LOG_basename,  dedispersion_dir, observation_basen
                         candidates = sifting.remove_DM_problems(candidates, minimum_numDMs_where_detected, list_DMs, minimum_acceptable_DM)
                         if verbosity_level >= 1:    print "sift_candidates:: removed DM probems. N_cands = ", len(candidates.cands)
                 if flag_remove_harmonics==1:
-                        candidates = sifting.remove_harmonics(candidates)
+                        try:
+                                candidates = sifting.remove_harmonics(candidates)
+                        except:
+                                pass
                         if verbosity_level >= 1:    print "sift_candidates:: removed harmonics. N_cands = ", len(candidates.cands)
-        else:
-                print "sift_candidates:: ERROR: len(candidates.cands) < 1!!! candidates = %s" % (candidates)
-                exit()
+        #else:
+        #        print "sift_candidates:: ERROR: len(candidates.cands) < 1!!! candidates = %s" % (candidates)
+        #        exit()
         
 
         if verbosity_level >= 1:                print "sift_candidates:: Sorting the candidates by sigma...", ; sys.stdout.flush()
@@ -794,9 +797,45 @@ def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_m
                                 print "NOTE: '%s.dat' already exists. No need to create it again." % (new_outfile_name)
 
 
+def check_if_DM_trial_was_searched(dat_file, list_zmax, jerksearch_zmax, jerksearch_wmax):
+        dat_file_nameonly = os.path.basename(dat_file)
+        fft_file = dat_file.replace(".dat", ".fft")
+	fft_file_nameonly = os.path.basename(fft_file)
+        
+        if not os.path.exists(dat_file) or os.path.getsize(dat_file) == 0:
+                return False
 
-def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfile=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+        for z in list_zmax:
+                ACCEL_filename          = dat_file.replace(".dat", "_ACCEL_%s" % (int(z)))
+                ACCEL_cand_filename     = ACCEL_filename + ".cand"
+                ACCEL_txtcand_filename  = ACCEL_filename + ".txtcand"
 
+                #print "check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename)
+                if not os.path.exists(ACCEL_filename) or os.path.getsize(ACCEL_filename) == 0:
+                        return False
+                if not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename) == 0:
+                        return False
+                if not os.path.exists(ACCEL_txtcand_filename) or os.path.getsize(ACCEL_txtcand_filename) == 0:
+                        return False
+
+        if jerksearch_wmax > 0:
+                ACCEL_filename = dat_file.replace(".dat", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
+                ACCEL_cand_filename     = ACCEL_filename + ".cand"
+                ACCEL_txtcand_filename  = ACCEL_filename + ".txtcand"
+                #print "check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename)
+                if not os.path.exists(ACCEL_filename) or os.path.getsize(ACCEL_filename) == 0:                        
+                        return False
+                if not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename) == 0:
+                        return False
+                if not os.path.exists(ACCEL_txtcand_filename) or os.path.getsize(ACCEL_txtcand_filename) == 0:
+                        return False
+
+        return True
+                
+
+def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices, flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfile=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+
+        i_seg, N_seg, i_ck, N_ck = list_seg_ck_indices
         
         if verbosity_level >= 2:
                 print "periodicity_search_FFT:: Files to search: ", "%s/*DM*.*.dat, excluding red" % (work_dir)
@@ -836,70 +875,80 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, flag_use_cuda=0, lis
                 dat_file_nameonly = os.path.basename(dat_file)
                 fft_file = dat_file.replace(".dat", ".fft")
                 fft_file_nameonly = os.path.basename(fft_file)
-                print
-                if dict_flag_steps['flag_step_realfft'] == 1:
-                        print "DM trial %d/%d - Doing realfft  of %s..." % (i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
-                        realfft(dat_file, work_dir, LOG_basename, "", presto_env_zmax_0, 0, flag_LOG_append)
-                        print "done!" ; sys.stdout.flush()
 
-                        print "DM trial %d/%d - Doing rednoise of %s..." % (i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
-                        rednoise(fft_file, work_dir, LOG_basename, "", presto_env_zmax_0, verbosity_level)
-                        print "done!" ; sys.stdout.flush()
-                         
-                        print "DM trial %d/%d - Applying zapfile '%s' to '%s'..." % (i+1, N_files_to_search, zapfile_nameonly, fft_file_nameonly), ; sys.stdout.flush()
-                        zapped_fft_filename, zapped_inf_filename = zapbirds(fft_file, zapfile, work_dir, LOG_basename, presto_env_zmax_0, verbosity_level)
-                        zapped_fft_nameonly = os.path.basename(zapped_fft_filename)
-                        print "done!" ; sys.stdout.flush()
+                DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, jerksearch_zmax, jerksearch_wmax)
+                
+                if dict_flag_steps['flag_step_realfft'] == 1:
+
+                        if DM_trial_was_searched == False:
+                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing realfft  of %s..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
+                                realfft(dat_file, work_dir, LOG_basename, "", presto_env_zmax_0, 0, flag_LOG_append)
+                                print "done!" ; sys.stdout.flush()
+
+                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing rednoise of %s..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
+                                rednoise(fft_file, work_dir, LOG_basename, "", presto_env_zmax_0, verbosity_level)
+                                print "done!" ; sys.stdout.flush()
+                                
+                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Applying zapfile '%s' to '%s'..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapfile_nameonly, fft_file_nameonly), ; sys.stdout.flush()
+                                zapped_fft_filename, zapped_inf_filename = zapbirds(fft_file, zapfile, work_dir, LOG_basename, presto_env_zmax_0, verbosity_level)
+                                zapped_fft_nameonly = os.path.basename(zapped_fft_filename)
+                                print "done!" ; sys.stdout.flush()
                 else:
                         print "STEP_REALFFT = 0, skipping realfft, rednoise, zapbirds..."
 
                 #print "\033[1m >> TIP:\033[0m Follow accelsearch with '\033[1mtail -f %s\033[0m'" % (log_abspath)
 
-                if dict_flag_steps['flag_step_periodicity_search'] == 1: 
-                        for z in list_zmax:
-                                tstart_accelsearch = time.time() 
-                                print "DM trial %d/%d - Doing accelsearch of %s with zmax = %4d..." % (i+1, N_files_to_search, zapped_fft_nameonly, z), ; sys.stdout.flush()
-                                if int(z) == 0:
-                                        dict_env = copy.deepcopy(dict_env_zmax_0)
-                                        if verbosity_level >= 2:
-                                                print "accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env)
-                                        flag_cuda = ""
-                                else:
-                                        dict_env = copy.deepcopy(dict_env_zmax_any)
-                                        if flag_use_cuda == 1:
-                                                gpu_id = random.choice(list_cuda_ids)
-                                                flag_cuda = " -cuda %d " % (gpu_id) 
-                                        else:
+                if dict_flag_steps['flag_step_periodicity_search'] == 1:
+                        if DM_trial_was_searched == False:
+                                for z in list_zmax:
+                                        tstart_accelsearch = time.time() 
+                                        print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapped_fft_nameonly, z), ; sys.stdout.flush()
+                                        if int(z) == 0:
+                                                dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                if verbosity_level >= 2:
+                                                        print "accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env)
                                                 flag_cuda = ""
+                                        else:
+                                                dict_env = copy.deepcopy(dict_env_zmax_any)
+                                                if flag_use_cuda == 1:
+                                                        gpu_id = random.choice(list_cuda_ids)
+                                                        flag_cuda = " -cuda %d " % (gpu_id) 
+                                                else:
+                                                        flag_cuda = ""
 
-                                        if verbosity_level >= 2:
-                                                print "periodicity_search_FFT:: zmax == %d ----> dict_env = %s" % (int(z), dict_env)
-                                                print "periodicity_search_FFT:: Now check CUDA: list_cuda_ids = ", list_cuda_ids
-                                                print "periodicity_search_FFT:: flag_use_cuda = ", flag_use_cuda
-                                                print "periodicity_search_FFT:: flag_cuda = ", flag_cuda
+                                                if verbosity_level >= 2:
+                                                        print "periodicity_search_FFT:: zmax == %d ----> dict_env = %s" % (int(z), dict_env)
+                                                        print "periodicity_search_FFT:: Now check CUDA: list_cuda_ids = ", list_cuda_ids
+                                                        print "periodicity_search_FFT:: flag_use_cuda = ", flag_use_cuda
+                                                        print "periodicity_search_FFT:: flag_cuda = ", flag_cuda
 
-                                accelsearch_flags = other_flags_accelsearch + flag_cuda #+ " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
+                                        accelsearch_flags = other_flags_accelsearch + flag_cuda #+ " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
+
+                                        accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                        tend_accelsearch = time.time()
+                                        time_taken_accelsearch_s = tend_accelsearch -tstart_accelsearch
+                                        print "done in %.2f s!" % (time_taken_accelsearch_s) ; sys.stdout.flush()
+                                        ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
+
+
+                                if jerksearch_wmax > 0:
+                                        tstart_jerksearch = time.time()
+                                        print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), ; sys.stdout.flush()
+                                        flag_cuda = ""
+                                        jerksearch_flags = other_flags_accelsearch + flag_cuda
+                                        jerksearch(fft_file, work_dir, log_abspath, jerksearch_ncpus=jerksearch_ncpus, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                        tend_jerksearch = time.time()
+                                        time_taken_jerksearch_s = tend_jerksearch - tstart_jerksearch
+                                        print "done in %.2f s!" % (time_taken_jerksearch_s) ; sys.stdout.flush()
+                                        ACCEL_filename = fft_file.repglace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
                                 
-                                accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
-                                tend_accelsearch = time.time()
-                                time_taken_accelsearch_s = tend_accelsearch -tstart_accelsearch
-                                print "done in %.2f s!" % (time_taken_accelsearch_s) ; sys.stdout.flush()
-                                ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
-
-
-                        if jerksearch_wmax > 0:
-                                tstart_jerksearch = time.time()
-                                print "DM trial %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (i+1, N_files_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), ; sys.stdout.flush()
-                                flag_cuda = ""
-                                jerksearch_flags = other_flags_accelsearch + flag_cuda
-                                jerksearch(fft_file, work_dir, log_abspath, jerksearch_ncpus=jerksearch_ncpus, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
-                                tend_jerksearch = time.time()
-                                time_taken_jerksearch_s = tend_jerksearch - tstart_jerksearch
-                                print "done in %.2f s!" % (time_taken_jerksearch_s) ; sys.stdout.flush()
-                                ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
-                if flag_remove_fftfile==1:
+                        else:
+                                print "Seg %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly)
+                        print
+                        
+                if flag_remove_fftfile==1 and os.path.exists(fft_file):
                         if verbosity_level >= 1:
-                                print "DM trial %d/%d - Removing %s to save disk space..." % (i+1, N_files_to_search, fft_file_nameonly), ; sys.stdout.flush()
+                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Removing %s to save disk space..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, fft_file_nameonly), ; sys.stdout.flush()
                         os.remove(fft_file)
                         if verbosity_level >= 1:
                                 print "done!"; sys.stdout.flush()
@@ -1448,7 +1497,7 @@ def zapbirds(fft_infile, zapfile_name, work_dir, LOG_basename, presto_env, verbo
         return zapped_fft_filename, zapped_inf_filename
         
 
-def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, LOG_basename, segment_label, chunk_label, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfile=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, LOG_basename, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfile=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
 
@@ -1484,7 +1533,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
                         print "dedisperse_rednoise_and_periodicity_search_FFT:: STEP_DEDISPERSE = 0, skipping prepsubband..."
 
         
-        periodicity_search_FFT(out_dir, LOG_basename, zapfile, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfile, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
+        periodicity_search_FFT(out_dir, LOG_basename, zapfile, list_seg_ck_indices, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfile, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
 
 
 
@@ -1641,7 +1690,7 @@ def init_default(observation_filename):
 
         dict_survey_configuration_default_values = { 'SEARCH_LABEL':                        "%s               # Label of this search project" % os.path.basename(os.getcwd()),
                                                      'ROOT_WORKDIR':                        "%s               # Path of the root working directory" % os.getcwd(),
-                                                     'DATA_TYPE':                           "%20s       # Options: filterbank, psrfits" % (default_file_format),
+                                                     'DATA_TYPE':                           "%-18s           # Options: filterbank, psrfits" % (default_file_format),
                                                      'PRESTO':                              "%s               # Path of the main PRESTO installation" % presto_path,                                   
                                                      'PRESTO_GPU':                          "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,                               
                                                      'DM_MIN':                              "2.0              # Minimum DM to search",                                   
@@ -1652,8 +1701,8 @@ def init_default(observation_filename):
                                                      'ZAP_ISOLATED_PULSARS_MAX_HARM':       "8                # If zap the known pulsars in the power spectra, do it up to this harmonic ",                    
                                                      'ACCELSEARCH_LIST_ZMAX':               "0,200            # List (comma-separated) of zmax values to use with PRESTO accelsearch ",                    
                                                      'ACCELSEARCH_NUMHARM':                 "8                # Number of harmonics to use for acceleration search",
-                                                     'JERKSEARCH_ZMAX':                     "200              # Zmax value to use for jerk search",
-                                                     'JERKSEARCH_WMAX':                     "600              # Wmax value to use for jerk search (0 = do not do jerk search)",
+                                                     'JERKSEARCH_ZMAX':                     "0                # Zmax value to use for jerk search",
+                                                     'JERKSEARCH_WMAX':                     "0                # Wmax value to use for jerk search (0 = do not do jerk search)",
                                                      'JERKSEARCH_NUMHARM':                  "4                # Number of harmonics to use for jerk search",
                                                      'JERKSEARCH_NCPUS':                    "%d               # Number of CPU cores to use for jerk search" % (multiprocessing.cpu_count()),
                                                      'PERIOD_TO_SEARCH_MIN':                "0.001            # Mimimum acceptable candidate period (s) ",                     
@@ -1688,7 +1737,7 @@ def init_default(observation_filename):
                                                      'SIFTING_SIGMA_THRESHOLD' :            "4.0             # Minimum acceptable significance of a candidate",                 
                                                      
                                                      'FLAG_FOLD_KNOWN_PULSARS' :            "1               # Fold candidates that are likely redetections of known pulsars? (1=yes, 0=no)",          
-                                                     'FLAG_FOLD_TIMESERIES' :               "1               # Fold the candidates using the time series (super-fast, but no frequency information)? (1=yes, 0=no)",                    
+                                                     'FLAG_FOLD_TIMESERIES' :               "0               # Fold the candidates using the time series (super-fast, but no frequency information)? (1=yes, 0=no)",                    
                                                      'FLAG_FOLD_RAWDATA' :                  "1               # Fold the candidates using raw data file (slow, but has all the information)? (1=yes, 0=no)",
 
                                                      'STEP_RFIFIND':                        "1               # Run the RFIFIND step? (1=yes, 0=no)",
@@ -2284,8 +2333,8 @@ if config.flag_step_dedisperse == 1:
                 else:
                         list_segments =  ["%sm" % (x) for x in sorted(config.list_segments_nofull)]
 
-
-                for seg in list_segments:
+                N_seg = len(list_segments)
+                for seg, i_seg in zip(list_segments, range(N_seg)):
                         work_dir_segment = os.path.join(work_dir_obs, "%s" % seg)
                         if verbosity_level >= 1:          print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating working directory '%s'..." % (work_dir_segment),; sys.stdout.flush()
                         if not os.path.exists(work_dir_segment):
@@ -2293,7 +2342,8 @@ if config.flag_step_dedisperse == 1:
                         if verbosity_level >= 1:                print "done!"; sys.stdout.flush()
 
         # 3) LOOP OVER THE CHUNK
-                        for ck in sorted(config.dict_search_structure[obs][seg].keys()):
+                        N_ck = len(config.dict_search_structure[obs][seg].keys())
+                        for ck,i_ck in zip(sorted(config.dict_search_structure[obs][seg].keys()), range(N_ck)):
                                 if verbosity_level >= 1:
                                         print
                                         print "**************************************************************"
@@ -2335,6 +2385,7 @@ if config.flag_step_dedisperse == 1:
                                                                 LOG_basename,
                                                                 seg,
                                                                 ck,
+                                                                [i_seg, N_seg, i_ck, N_ck],
                                                                 zapfile,
                                                                 make_even_number(config.list_Observations[i].N_samples/1.0),
                                                                 config.ignorechan_list,
