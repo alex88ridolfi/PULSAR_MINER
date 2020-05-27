@@ -1,4 +1,10 @@
 ******************************
+Version 1.1.4 (27May2020)
+
+- Fixed bug that occurred when reading the start MJD of filterbank files
+- Added support to PRESTO v3.0.1's new sifting.py module ('cmp_sigma' replaced by key=sifting.attrgetter('sigma'), reverse=True)
+
+******************************
 Version 1.1.3 (05May2020)
 
 - Now the pipeline check whether a DM trial has already been searched and, if so, does not recreate the .fft file

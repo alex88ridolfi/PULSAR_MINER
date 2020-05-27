@@ -19,7 +19,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.1.3 (06May2020)"
+string_version = "1.1.4 (27May2020)"
 
 
 class Pulsar(object):
@@ -227,7 +227,7 @@ class Observation(object):
                                 self.freq_high_MHz    = np.amax(object_file.freqs)
                                 self.freq_low_MHz     = np.amin(object_file.freqs)
                                 self.MJD_int          = int(object_file.header['tstart'])
-                                self.MJD              = object_file.header['tstart']
+                                self.Tstart_MJD       = object_file.header['tstart']
                                 
                                 self.source_name      = object_file.header['source_name'].strip()
                                 
@@ -244,12 +244,12 @@ class Observation(object):
                                 self.chanbw_MHz       = np.fabs(np.float(       get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
                                 self.bw_MHz           = self.chanbw_MHz*self.nchan
                                 self.backend          = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                self.MJD              = np.float(      get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                self.Tstart_MJD              = np.float(      get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
                                 self.freq_high_MHz    = np.float(      get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
                                 self.freq_central_MHz = self.freq_high_MHz -0.5*self.bw_MHz
                                 self.freq_low_MHz     = self.freq_high_MHz - self.bw_MHz
 
-                                print self.N_samples, self.t_samp_s, self.T_obs_s, self.nbits, self.nchan, self.chanbw_MHz, self.bw_MHz, self.backend, self.MJD, self.freq_high_MHz, self.freq_central_MHz, self.freq_low_MHz
+                                print self.N_samples, self.t_samp_s, self.T_obs_s, self.nbits, self.nchan, self.chanbw_MHz, self.bw_MHz, self.backend, self.Tstart_MJD, self.freq_high_MHz, self.freq_central_MHz, self.freq_low_MHz
                                 
                                 
                 if data_type=="psrfits":
@@ -424,7 +424,11 @@ def sift_candidates(work_dir, LOG_basename,  dedispersion_dir, observation_basen
         
 
         if verbosity_level >= 1:                print "sift_candidates:: Sorting the candidates by sigma...", ; sys.stdout.flush()
-        candidates.sort(sifting.cmp_sigma)
+        try:
+                candidates.sort(sifting.cmp_sigma)              # If using PRESTO 2.1's sifting.py
+        except AttributeError:
+                candidates.sort(key=sifting.attrgetter('sigma'), reverse=True)  #If using PRESTO 3's sifting.py
+
         if verbosity_level >= 1:                print "done!"
 
         if verbosity_level >= 1:                print "sift_candidates:: Writing down the best candidates on file '%s'..." % (best_cands_filename), ; sys.stdout.flush()
