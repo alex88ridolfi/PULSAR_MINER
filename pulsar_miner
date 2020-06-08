@@ -19,7 +19,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.1.4 (27May2020)"
+string_version = "1.1.5 (08Jun2020)"
 
 
 class Pulsar(object):
@@ -472,7 +472,7 @@ def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, 
 
         
         if what_fold=="timeseries":
-                file_to_fold = os.path.join(dir_dedispersion, obs, seg, ck, cand.filename.replace("2017_DM", "_%s_%s"% (seg, ck)).split("_ACCEL")[0] + ".dat" )
+                file_to_fold = os.path.join(dir_dedispersion, obs, seg, ck, cand.filename.split("_ACCEL")[0] + ".dat" )
                 cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -o ts_fold_%s_%s_%s_DM%.2f_%s   %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
                 execute_and_log(cmd_prepfold, work_dir, log_abspath, dict_env, flag_LOG_append)
         elif what_fold=="rawdata":
@@ -761,7 +761,7 @@ def jerksearch(infile, work_dir, log_abspath, jerksearch_ncpus, numharm=4, zmax=
                 print "END JERKSEARCH ---------------------------------------------------------------------- "
 
                 
-def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1 ):        
+def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=0 ):        
         segment_length_s = segment_min * 60
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
         
@@ -790,10 +790,17 @@ def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_m
                 
                 new_outfile_name = "%s" % (os.path.basename(path_new)) 
                 
-                cmd_prepdata_split = "prepdata -nobary -o %s -start %.3f -numout %s %s" % (new_outfile_name, start_fraction, numout,  datfile_name)
+                cmd_prepdata_split = "prepdata -nobary -o %s/%s -start %.3f -numout %s %s" % (work_dir, new_outfile_name, start_fraction, numout,  datfile_name)
                 
                 output_datfile = "%s/%s.dat" % (work_dir, new_outfile_name)
                 output_inffile = "%s/%s.dat" % (work_dir, new_outfile_name)
+                output_scriptfile = "%s/%s.dat.makecmd" % (work_dir, new_outfile_name)
+                
+                if flag_remove_datfiles_of_segments == 1 and (not os.path.exists(output_scriptfile)):
+                        with open(output_scriptfile, 'w') as f:
+                                f.write("%s\n" % (cmd_prepdata_split))
+                        os.chmod(output_scriptfile, 0775)
+                
                 if check_prepdata_outfiles(output_datfile.replace(".dat", "")) == False:
                         execute_and_log(cmd_prepdata_split, work_dir, log_abspath, dict_env, flag_LOG_append)
                 else:
@@ -811,33 +818,42 @@ def check_if_DM_trial_was_searched(dat_file, list_zmax, jerksearch_zmax, jerksea
 
         for z in list_zmax:
                 ACCEL_filename          = dat_file.replace(".dat", "_ACCEL_%s" % (int(z)))
+                ACCEL_filename_empty    = dat_file.replace(".dat", "_ACCEL_%s_empty" % (int(z)))
                 ACCEL_cand_filename     = ACCEL_filename + ".cand"
                 ACCEL_txtcand_filename  = ACCEL_filename + ".txtcand"
 
                 #print "check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename)
-                if not os.path.exists(ACCEL_filename) or os.path.getsize(ACCEL_filename) == 0:
+                #print "check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename_empty, ACCEL_cand_filename, ACCEL_txtcand_filename)
+                
+                
+                if (not os.path.exists(ACCEL_filename)       or os.path.getsize(ACCEL_filename)==0        ) and \
+                   (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty)==0  ):
                         return False
-                if not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename) == 0:
+                if (not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename)==0) and \
+                   (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty)==0  ):
                         return False
-                if not os.path.exists(ACCEL_txtcand_filename) or os.path.getsize(ACCEL_txtcand_filename) == 0:
+                if not os.path.exists(ACCEL_txtcand_filename):
                         return False
 
         if jerksearch_wmax > 0:
-                ACCEL_filename = dat_file.replace(".dat", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
+                ACCEL_filename          = dat_file.replace(".dat", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
+                ACCEL_filename_empty    = dat_file.replace(".dat", "_ACCEL_%s_JERK_%s_empty" % (jerksearch_zmax, jerksearch_wmax))
                 ACCEL_cand_filename     = ACCEL_filename + ".cand"
                 ACCEL_txtcand_filename  = ACCEL_filename + ".txtcand"
                 #print "check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename)
-                if not os.path.exists(ACCEL_filename) or os.path.getsize(ACCEL_filename) == 0:                        
+                if (not os.path.exists(ACCEL_filename)       or os.path.getsize(ACCEL_filename)==0        ) and \
+                   (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty)==0  ):
                         return False
-                if not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename) == 0:
+                if (not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename)==0) and \
+                   (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty)==0  ):
                         return False
-                if not os.path.exists(ACCEL_txtcand_filename) or os.path.getsize(ACCEL_txtcand_filename) == 0:
+                if not os.path.exists(ACCEL_txtcand_filename):
                         return False
 
         return True
                 
 
-def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices, flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfile=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+def periodicity_search_FFT(work_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
 
         i_seg, N_seg, i_ck, N_ck = list_seg_ck_indices
         
@@ -873,6 +889,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices,
 
         zapfile_nameonly = os.path.basename(zapfile)
         for i in range(N_files_to_search):
+                print
                 if verbosity_level >= 2:
                         print "periodicity_search_FFT: inside loop with i = %d / %d" % (i, N_files_to_search-1)
                 dat_file = list_files_to_search[i]
@@ -885,15 +902,22 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices,
                 if dict_flag_steps['flag_step_realfft'] == 1:
 
                         if DM_trial_was_searched == False:
-                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing realfft  of %s..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
+                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing realfft  of %s..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
                                 realfft(dat_file, work_dir, LOG_basename, "", presto_env_zmax_0, 0, flag_LOG_append)
                                 print "done!" ; sys.stdout.flush()
 
-                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing rednoise of %s..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
+                                if flag_remove_datfiles_of_segments==1 and (segment_label != "full") and os.path.exists(dat_file):
+                                        if verbosity_level >= 1:
+                                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Removing %s to save disk space (use \"%s\" to recreate it)..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly, dat_file_nameonly+".makecmd"), ; sys.stdout.flush()
+                                        os.remove(dat_file)
+                                        if verbosity_level >= 1:
+                                                print "done!"; sys.stdout.flush()
+
+                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing rednoise of %s..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly), ; sys.stdout.flush()
                                 rednoise(fft_file, work_dir, LOG_basename, "", presto_env_zmax_0, verbosity_level)
                                 print "done!" ; sys.stdout.flush()
                                 
-                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Applying zapfile '%s' to '%s'..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapfile_nameonly, fft_file_nameonly), ; sys.stdout.flush()
+                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Applying zapfile '%s' to '%s'..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapfile_nameonly, fft_file_nameonly), ; sys.stdout.flush()
                                 zapped_fft_filename, zapped_inf_filename = zapbirds(fft_file, zapfile, work_dir, LOG_basename, presto_env_zmax_0, verbosity_level)
                                 zapped_fft_nameonly = os.path.basename(zapped_fft_filename)
                                 print "done!" ; sys.stdout.flush()
@@ -906,7 +930,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices,
                         if DM_trial_was_searched == False:
                                 for z in list_zmax:
                                         tstart_accelsearch = time.time() 
-                                        print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapped_fft_nameonly, z), ; sys.stdout.flush()
+                                        print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapped_fft_nameonly, z), ; sys.stdout.flush()
                                         if int(z) == 0:
                                                 dict_env = copy.deepcopy(dict_env_zmax_0)
                                                 if verbosity_level >= 2:
@@ -937,7 +961,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices,
 
                                 if jerksearch_wmax > 0:
                                         tstart_jerksearch = time.time()
-                                        print "Seg %d/%d | ck %d/%d | DM %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), ; sys.stdout.flush()
+                                        print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), ; sys.stdout.flush()
                                         flag_cuda = ""
                                         jerksearch_flags = other_flags_accelsearch + flag_cuda
                                         jerksearch(fft_file, work_dir, log_abspath, jerksearch_ncpus=jerksearch_ncpus, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
@@ -947,16 +971,19 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, list_seg_ck_indices,
                                         ACCEL_filename = fft_file.repglace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
                                 
                         else:
-                                print "Seg %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly)
-                        print
+                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly)
+                
                         
-                if flag_remove_fftfile==1 and os.path.exists(fft_file):
+                if flag_remove_fftfiles==1 and os.path.exists(fft_file):
                         if verbosity_level >= 1:
-                                print "Seg %d/%d | ck %d/%d | DM %d/%d - Removing %s to save disk space..." % (i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, fft_file_nameonly), ; sys.stdout.flush()
+                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Removing %s to save disk space..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, fft_file_nameonly), ; sys.stdout.flush()
                         os.remove(fft_file)
                         if verbosity_level >= 1:
                                 print "done!"; sys.stdout.flush()
-                
+
+
+                        
+                                
 
 
 
@@ -1501,7 +1528,7 @@ def zapbirds(fft_infile, zapfile_name, work_dir, LOG_basename, presto_env, verbo
         return zapped_fft_filename, zapped_inf_filename
         
 
-def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, LOG_basename, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfile=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, LOG_basename, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
 
@@ -1526,7 +1553,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
                                 
                         segment_min = np.float(segment_label.replace("m", ""))
                         i_chunk = int(chunk_label.replace("ck", ""))
-                        split_into_chunks(list_datfiles_to_split, LOG_basename, out_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1 )
+                        split_into_chunks(list_datfiles_to_split, LOG_basename, out_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=flag_remove_datfiles_of_segments)
 
                 if verbosity_level >= 2:
                         print "dedisperse_rednoise_and_periodicity_search_FFT:: launching periodicity_search_FFT"; sys.stdout.flush()
@@ -1537,7 +1564,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
                         print "dedisperse_rednoise_and_periodicity_search_FFT:: STEP_DEDISPERSE = 0, skipping prepsubband..."
 
         
-        periodicity_search_FFT(out_dir, LOG_basename, zapfile, list_seg_ck_indices, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfile, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
+        periodicity_search_FFT(out_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfiles, flag_remove_datfiles_of_segments, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
 
 
 
@@ -1549,7 +1576,7 @@ class SurveyConfiguration(object):
                 self.list_datafiles = []
 
                 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
                 
@@ -1598,6 +1625,7 @@ class SurveyConfiguration(object):
                         elif key == "ACCELSEARCH_FLAGS":                             self.accelsearch_flags                = self.dict_survey_configuration[key]
                         elif key == "ACCELSEARCH_GPU_FLAGS":                         self.accelsearch_gpu_flags            = self.dict_survey_configuration[key]
                         elif key == "FLAG_REMOVE_FFTFILES":                          self.flag_remove_fftfiles             = int(self.dict_survey_configuration[key])
+                        elif key == "FLAG_REMOVE_DATFILES_OF_SEGMENTS":              self.flag_remove_datfiles_of_segments = int(self.dict_survey_configuration[key])
                         elif key == "USE_CUDA":                                      self.flag_use_cuda                    = int(self.dict_survey_configuration[key])
                         elif key == "CUDA_IDS":                                      self.list_cuda_ids                    = [int(x) for x in self.dict_survey_configuration[key].split(",")]
                         elif key == "LIST_SEGMENTS":                                 self.list_segments                    = self.dict_survey_configuration[key].split(",")
@@ -1728,7 +1756,9 @@ def init_default(observation_filename):
                                                      'ACCELSEARCH_FLAGS':                   "\"\"             # Any additional options to give to ACCELSEARCH",         
                                                      'ACCELSEARCH_GPU_FLAGS':               "\"\"             # Any additional options to give to ACCELSEARCH of PRESTO_ON_GPU",
                                                      'PREPFOLD_FLAGS' :                     "\"-ncpus 4 -n 64\"     # Any additional options to give to PREPFOLD",
-                                                     'FLAG_REMOVE_FFTFILES':                "0               # Remove FFT files after searching to save half the disk space? (1=yes, 0=no)", 
+                                                     'FLAG_REMOVE_FFTFILES':                "1               # Remove FFT files after searching to save disk space? (1=yes, 0=no)",
+                                                     'FLAG_REMOVE_DATFILES_OF_SEGMENTS':    "0               # Remove .dat files of the shorter segments after searching to save disk space? (1=yes, 0=no)",
+                                                     
                                                      'USE_CUDA':                            "%s               # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,                                 
                                                      'CUDA_IDS':                            "0               # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",      
                                                      'LIST_SEGMENTS':                       "full             # Comma-separated lengths (in minutes) of chunks to search (e.g. \"full,20,10\")",                            
@@ -1814,6 +1844,7 @@ def init_default(observation_filename):
                 f.write("%-35s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
                 f.write("\n")
                 f.write("%-35s %s\n" % ('FLAG_REMOVE_FFTFILES', dict_survey_configuration_default_values['FLAG_REMOVE_FFTFILES']))
+                f.write("%-35s %s\n" % ('FLAG_REMOVE_DATFILES_OF_SEGMENTS', dict_survey_configuration_default_values['FLAG_REMOVE_DATFILES_OF_SEGMENTS']))
                 f.write("%-35s %s\n" % ('SIFTING_FLAG_REMOVE_DUPLICATES', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DUPLICATES']))
                 f.write("%-35s %s\n" % ('SIFTING_FLAG_REMOVE_DM_PROBLEMS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DM_PROBLEMS']))
                 f.write("%-35s %s\n" % ('SIFTING_FLAG_REMOVE_HARMONICS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_HARMONICS']))
@@ -1881,9 +1912,10 @@ if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--hel
         print "%10s  %-32s:  %-50s" % ("-version", "", "Print code version")
         print
         print "To create default configuration files: \033[1m%s -init_default [<observationfile>]\033[0m" % (os.path.basename(sys.argv[0]))
+        print
         exit()
 elif (("-version" in sys.argv) or ("--version" in sys.argv)):
-        print "Version: %s" % (string_version)
+        print "PULSAR_MINER version: %s" % (string_version)
         exit()
 else:
         for j in range(1, len(sys.argv)):
@@ -2340,7 +2372,7 @@ if config.flag_step_dedisperse == 1:
                 N_seg = len(list_segments)
                 for seg, i_seg in zip(list_segments, range(N_seg)):
                         work_dir_segment = os.path.join(work_dir_obs, "%s" % seg)
-                        if verbosity_level >= 1:          print "3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating working directory '%s'..." % (work_dir_segment),; sys.stdout.flush()
+                        if verbosity_level >= 1:          print "\n3) DEDISPERSION, DE-REDDENING AND PERIODICITY SEARCH: creating working directory '%s'..." % (work_dir_segment),; sys.stdout.flush()
                         if not os.path.exists(work_dir_segment):
                                 os.makedirs(work_dir_segment)
                         if verbosity_level >= 1:                print "done!"; sys.stdout.flush()
@@ -2410,7 +2442,8 @@ if config.flag_step_dedisperse == 1:
                                                                 config.period_to_search_min, 
                                                                 config.period_to_search_max, 
                                                                 config.accelsearch_flags, 
-                                                                config.flag_remove_fftfiles, 
+                                                                config.flag_remove_fftfiles,
+                                                                config.flag_remove_datfiles_of_segments,
                                                                 config.presto_env,
                                                                 config.presto_gpu_env,
                                                                 verbosity_level,
@@ -2613,8 +2646,11 @@ if config.flag_step_folding == 1:
                                         
                                                 print "FOLDING CANDIDATE TIMESERIES %d/%d of %s: seg %s / %s..." % (count_folded_ts, N_cands_to_fold, obs, seg, ck), ; sys.stdout.flush()
                                                 tstart_folding_cand_ts = time.time()
-
-                                                fold_candidate(work_dir_candidate_folding,  
+                                                file_to_fold = os.path.join(dir_dedispersion, obs, seg, ck, candidate.filename.split("_ACCEL")[0] + ".dat" )
+                                                flag_remove_dat_after_folding = 0
+                                                if os.path.exists(file_to_fold):
+                                                        
+                                                        fold_candidate(work_dir_candidate_folding,  
                                                                                      LOG_basename, 
                                                                                      config.list_Observations[i].file_abspath,
                                                                                      dir_dedispersion,
@@ -2631,13 +2667,13 @@ if config.flag_step_folding == 1:
                                                                                      1,
                                                                                      "timeseries",
                                                                                      config.num_simultaneous_folds
-                                                )
-                                                tend_folding_cand_ts = time.time()
-                                                time_taken_folding_cand_ts_s = tend_folding_cand_ts - tstart_folding_cand_ts
-                                                print "done in %.2f s!" % (time_taken_folding_cand_ts_s) ; sys.stdout.flush()
-
-                                                
-                                                count_folded_ts = count_folded_ts + 1
+                                                        )
+                                                        tend_folding_cand_ts = time.time()
+                                                        time_taken_folding_cand_ts_s = tend_folding_cand_ts - tstart_folding_cand_ts
+                                                        print "done in %.2f s!" % (time_taken_folding_cand_ts_s) ; sys.stdout.flush()
+                                                        count_folded_ts = count_folded_ts + 1
+                                                else:
+                                                        print "dat file does not exists! Likely if you set FLAG_REMOVE_DATFILES_OF_SEGMENTS = 1 in the config file. Skipping..."
                                         
                 count_folded_raw = 1 
                 if config.flag_fold_rawdata == 1:

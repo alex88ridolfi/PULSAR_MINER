@@ -1,8 +1,17 @@
 ******************************
+Version 1.1.5 (08Jun2020)
+
+- Proper handling of the *_empty candidate files
+- Added option (parameter FLAG_REMOVE_DATFILES_OF_SEGMENTS) to remove the timeseries of chunks after being searched, for significant disk space saving
+- Some output polishing
+
+
+******************************
 Version 1.1.4 (27May2020)
 
 - Fixed bug that occurred when reading the start MJD of filterbank files
 - Added support to PRESTO v3.0.1's new sifting.py module ('cmp_sigma' replaced by key=sifting.attrgetter('sigma'), reverse=True)
+
 
 ******************************
 Version 1.1.3 (05May2020)
