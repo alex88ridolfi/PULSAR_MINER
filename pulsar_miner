@@ -863,7 +863,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, segment_label, chunk
                 print "periodicity_search_FFT:: presto_env_zmax_any = ", presto_env_zmax_any
         
 
-        list_files_to_search = sorted([ x for x in glob.glob("%s/*DM*.*.dat" % (work_dir)) if not "red" in x ])
+        list_files_to_search = sorted([ x for x in glob.glob("%s/*DM*.*.dat" % (work_dir))])
         N_files_to_search = len(list_files_to_search)
         
         frequency_to_search_max = 1./period_to_search_min_s
@@ -2331,6 +2331,7 @@ if config.flag_step_dedisperse == 1:
         if verbosity_level >= 2:
                 print "done!"
                 print "get_DDplan_scheme(config.list_Observations[i].file_abspath, = ", config.list_Observations[i].file_abspath
+        LOG_basename = "03_DDplan_scheme"
         list_DDplan_scheme = get_DDplan_scheme(config.list_Observations[i].file_abspath,
                                                dir_dedispersion,
                                                LOG_basename,
