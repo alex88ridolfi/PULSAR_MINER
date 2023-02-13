@@ -43,9 +43,11 @@ def import_bestprof( infile ):
 
 def ask_for_operation():
         print "SELECT OPERATION:"
+        print
         print "  %-20s -> Mark candidate as GOOD" % ("g")
-        print "  %-20s -> Unmark candidate as GOOD" % ("x")
         print "  %-20s -> Mark candidate as REDETECTION" % ("r")
+        print "  %-20s -> Mark candidate as BAD" % ("[ENTER]")
+        print "  %-20s -> Unmark candidate as GOOD" % ("x")
         print "  %-20s -> Unmark candidate as REDETECTION" % ("u")
         print "  %-20s -> Go to candidate N" % ("c N")
         print "  %-20s -> Go to previous candidate" % ("b")
@@ -332,9 +334,25 @@ while j < N_candidates:
         str_op = ''.join(list_str_op)
 
         if str_op == "":
-                str_op = "n"
-        
-        if (str_op[0] == "c" or str_op[0] == "C"):
+                str_op = "bad"
+
+        if (str_op == "bad"):
+                for file_to_rename in [ f for f in glob.glob( current_cand.split(".ps")[0] + "*" ) ] :
+                        if not file_to_rename.startswith("BAD_"):
+                                old_filename = file_to_rename
+                                new_filename = "BAD_"+file_to_rename.replace("GOOD_", "").replace("BAD_", "").replace("REDET_", "")
+				os.rename( old_filename, new_filename)
+                                print "%s --> %s" % (old_filename, new_filename)
+                        else:
+                                new_filename = file_to_rename
+                                print "%s already MARKED" % new_filename
+
+                basename = os.path.splitext(new_filename)[0]
+                list_dict_candidates_sorted[j]['bestprof_filename'] = basename + ".bestprof"
+
+                j = j+1
+                
+        elif (str_op[0] == "c" or str_op[0] == "C"):
                 j = int(str_op[1:])
         elif (str_op[0] == "n" or str_op[0] == "N"):
                 j = j+1
@@ -343,23 +361,37 @@ while j < N_candidates:
         elif (str_op[0] == "l" or str_op[0] == "l"):
                 show_known_pulsars(list_names, list_periods_ms, list_doppler_factors)
 
+                
         elif (str_op[0] == "g" or str_op[0] == "G"):
                 for file_to_rename in [ f for f in glob.glob( current_cand.split(".ps")[0] + "*" ) ] :
                         if not file_to_rename.startswith("GOOD_"):
-                                print "%s will be renamed!" % file_to_rename
-                                os.rename( file_to_rename, "GOOD_"+file_to_rename)
+                                old_filename = file_to_rename
+                                new_filename = "GOOD_"+file_to_rename.replace("GOOD_", "").replace("BAD_", "").replace("REDET_", "")
+				os.rename( old_filename, new_filename)
+                                print "%s --> %s" % (old_filename, new_filename)
                         else:
-                                print "%s already MARKED" % file_to_rename
+                                new_filename = file_to_rename
+				print "%s already MARKED" % new_filename
+
+                basename = os.path.splitext(new_filename)[0]
+                list_dict_candidates_sorted[j]['bestprof_filename'] = basename + ".bestprof"
+
 
                 j = j+1
 
         elif (str_op[0] == "r" or str_op[0] == "R"):
                 for file_to_rename in [ f for f in glob.glob( current_cand.split(".ps")[0] + "*" ) ] :
                         if not file_to_rename.startswith("REDET_"):
-                                print "%s will be renamed!" % file_to_rename
-                                os.rename( file_to_rename, "REDET_"+file_to_rename)
+                                old_filename = file_to_rename
+                                new_filename = "REDET_"+file_to_rename.replace("GOOD_", "").replace("BAD_", "").replace("REDET_", "")
+				os.rename( old_filename, new_filename)
+                                print "%s --> %s" % (old_filename, new_filename)
                         else:
-                                print "%s already MARKED" % file_to_rename
+                                new_filename = file_to_rename
+				print "%s already MARKED" % new_filename
+
+                basename = os.path.splitext(new_filename)[0]
+                list_dict_candidates_sorted[j]['bestprof_filename'] = basename + ".bestprof"
 
                 j = j+1
 
@@ -372,11 +404,17 @@ while j < N_candidates:
                         elif file_to_rename.startswith("REDET"):
                                 print "%s will be renamed (removing 'REDET_')!" % file_to_rename
                                 os.rename( file_to_rename, file_to_rename[6:])
+                        elif file_to_rename.startswith("BAD"):
+                                print "%s will be renamed (removing 'BAD_')!" % file_to_rename
+                                os.rename( file_to_rename, file_to_rename[4:])
+                
                 j = j+1
                 
         elif str_op == "done":
                 exit()                
-            
+
+        
+        
         if flag_flag_redetections == 0: 
                 proc.terminate()
 

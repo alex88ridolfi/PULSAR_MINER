@@ -30,8 +30,8 @@ def execute_and_log_bash(command, work_dir, id_num, flag_log=1):
         
                 if "?" in current_piece or "*" in current_piece:
                         print "ci sono = ", current_piece
-                        print "glob.glob(current_piece) = ", glob.glob(current_piece)
-                        new_list_for_Popen  = list_for_Popen[:i] +  glob.glob(current_piece) + list_for_Popen[i+1:]
+                        print "sorted(glob.glob(current_piece)) = ", sorted(glob.glob(current_piece))
+                        new_list_for_Popen  = list_for_Popen[:i] +  sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
                         
                         print "new_list_for_Popen = ", new_list_for_Popen
                         list_for_Popen = new_list_for_Popen
@@ -84,8 +84,8 @@ def execute_and_log(command, work_dir, id_num, flag_log=1):
                 
                 if "?" in current_piece or "*" in current_piece:
                         
-                        #print "glob.glob(current_piece) = ", glob.glob(current_piece)
-                        new_list_for_Popen  = list_for_Popen[:i] +  glob.glob(current_piece) + list_for_Popen[i+1:]
+                        #print "sorted(glob.glob(current_piece)) = ", sorted(glob.glob(current_piece))
+                        new_list_for_Popen  = list_for_Popen[:i] +  sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
                         
                         #print "new_list_for_Popen = ", new_list_for_Popen
                         list_for_Popen = new_list_for_Popen

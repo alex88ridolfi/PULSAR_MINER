@@ -1,4 +1,16 @@
 ******************************
+Version 1.1.6 (17May2021)
+- Added "pm_get_closest_beams" tool
+- Fixed bug that made the code stall when doing -init_default with a filterbank input file
+- Searching of the full-length data is now not mandatory
+- Summary of candidates now reports significances
+- "pm_inspect_cands" now labels all the candidates that have been inspected, including the bad ones
+- "pm_survey_sensitivity" now also take the DM step size into consideration
+- If STEP_RFIFIND = 0, avoid loading the mask file, just check its presence for faster precessing
+- Fixed bug in pm_split_datfile, which could produce chunks with an odd number of samples
+- Customizable number of DMs processed at once by prepsubband via the parameter "NUM_SIMULTANEOUS_DMS_PREPSUBBAND"
+
+******************************
 Version 1.1.5 (08Jun2020)
 
 - Proper handling of the *_empty candidate files

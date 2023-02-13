@@ -6,20 +6,17 @@ import sys, os, os.path, glob, subprocess, multiprocessing, shlex, shutil, copy
 import random, time, datetime, gc, imp
 import numpy as np
 
-import psrfits    #From PRESTO
-import filterbank #From PRESTO
-import rfifind    #From PRESTO
-import sifting    #From PRESTO
-import infodata   #From PRESTO
-import parfile    #From PRESTO
-import psr_utils  #From PRESTO
+try:
+        from presto import filterbank, infodata, parfile, psr_utils, psrfits, rfifind, sifting
+except:
+        import filterbank, infodata, parfile, psr_utils, psrfits, rfifind, sifting
 
 import warnings
 from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "1.1.5 (08Jun2020)"
+string_version = "1.1.6 (01Feb2021)"
 
 
 class Pulsar(object):
@@ -773,7 +770,7 @@ def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_m
         for datfile_name in list_datfiles_to_split:
                 inffile_name = datfile_name.replace(".dat", ".inf")
                 info_datfile = infodata.infodata(inffile_name)
-
+                
                 t_samp_s = info_datfile.dt
                 
                 N_samp = info_datfile.N
@@ -793,7 +790,7 @@ def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_m
                 cmd_prepdata_split = "prepdata -nobary -o %s/%s -start %.3f -numout %s %s" % (work_dir, new_outfile_name, start_fraction, numout,  datfile_name)
                 
                 output_datfile = "%s/%s.dat" % (work_dir, new_outfile_name)
-                output_inffile = "%s/%s.dat" % (work_dir, new_outfile_name)
+                output_inffile = "%s/%s.inf" % (work_dir, new_outfile_name)
                 output_scriptfile = "%s/%s.dat.makecmd" % (work_dir, new_outfile_name)
                 
                 if flag_remove_datfiles_of_segments == 1 and (not os.path.exists(output_scriptfile)):
@@ -968,10 +965,10 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, segment_label, chunk
                                         tend_jerksearch = time.time()
                                         time_taken_jerksearch_s = tend_jerksearch - tstart_jerksearch
                                         print "done in %.2f s!" % (time_taken_jerksearch_s) ; sys.stdout.flush()
-                                        ACCEL_filename = fft_file.repglace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
+                                        ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
                                 
                         else:
-                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly)
+                                print "Seg '%s' %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, i+1, N_files_to_search, dat_file_nameonly),
                 
                         
                 if flag_remove_fftfiles==1 and os.path.exists(fft_file):
@@ -1294,7 +1291,7 @@ def make_rfifind_mask(infile, out_dir, LOG_basename, time=2.0, freqsig=6.0, time
         result = get_rfifind_result(mask_file, log_abspath, verbosity_level)
 
 
-def get_DD_scheme_from_DDplan_output(output_DDplan):
+def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband):
         list_dict_schemes = []
 
         output_DDplan_list_lines = output_DDplan.split("\n")
@@ -1318,22 +1315,22 @@ def get_DD_scheme_from_DDplan_output(output_DDplan):
                         dDM         = np.float(param[2])
                         downsamp    = int(param[3])
                         num_DMs     = int(param[4])
-
-                        if num_DMs > 1000:
-                                N_schemes = int(num_DMs / 1000.) + 1
+                        
+                        if num_DMs > N_DMs_per_prepsubband:
+                                N_schemes = int(num_DMs / N_DMs_per_prepsubband) + 1
                                 
                                 
                                 for n in range(N_schemes-1):
-                                        lowDM    = low_DM + (n    * 1000 * dDM)
-                                        highDM   = lowDM + 1000 * dDM
-                                        dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': 1000 }
+                                        lowDM    = low_DM + (n    * N_DMs_per_prepsubband * dDM)
+                                        highDM   = lowDM + N_DMs_per_prepsubband * dDM
+                                        dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': N_DMs_per_prepsubband }
                                         list_dict_schemes.append(dict_scheme)
 
-                                lowDM    = low_DM + (N_schemes-1)   * 1000 * dDM
+                                lowDM    = low_DM + (N_schemes-1)   * N_DMs_per_prepsubband * dDM
                                 highDM   = high_DM
-                                print "high_DM = ", high_DM
+                                #print "high_DM = ", high_DM
                                 numDMs   =  int((highDM - lowDM) / dDM)
-                                print "numDMs =", numDMs
+                                #print "numDMs =", numDMs
 				dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': numDMs }
                                 list_dict_schemes.append(dict_scheme)
                                         
@@ -1364,7 +1361,7 @@ def check_prepsubband_result(work_dir, list_DD_schemes, verbosity_level=1):
 
         return True
 
-def get_DDplan_scheme(infile, out_dir, LOG_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, bw_MHz, nchan, nsubbands, t_samp_s):
+def get_DDplan_scheme(infile, out_dir, LOG_basename, loDM, highDM, DM_coherent_dedispersion, N_DMs_per_prepsubband, freq_central_MHz, bw_MHz, nchan, nsubbands, t_samp_s):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
@@ -1386,7 +1383,7 @@ def get_DDplan_scheme(infile, out_dir, LOG_basename, loDM, highDM, DM_coherent_d
         print "Running:  \033[1m %s \033[0m" % (cmd_DDplan)
         output_DDplan    = get_command_output(cmd_DDplan, shell_state=False, work_dir=out_dir)
 
-        list_DD_schemes  = get_DD_scheme_from_DDplan_output(output_DDplan)
+        list_DD_schemes  = get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband)
 
 
         return list_DD_schemes
@@ -1528,7 +1525,7 @@ def zapbirds(fft_infile, zapfile_name, work_dir, LOG_basename, presto_env, verbo
         return zapped_fft_filename, zapped_inf_filename
         
 
-def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, LOG_basename, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, LOG_basename, flag_search_full, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse':1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
 
@@ -1563,8 +1560,8 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
                 if verbosity_level >= 2:
                         print "dedisperse_rednoise_and_periodicity_search_FFT:: STEP_DEDISPERSE = 0, skipping prepsubband..."
 
-        
-        periodicity_search_FFT(out_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfiles, flag_remove_datfiles_of_segments, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
+        if not (segment_label == "full" and flag_search_full == 0):
+                periodicity_search_FFT(out_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfiles, flag_remove_datfiles_of_segments, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
 
 
 
@@ -1576,7 +1573,7 @@ class SurveyConfiguration(object):
                 self.list_datafiles = []
 
                 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'NUM_SIMULTANEOUS_DMS_PREPSUBBAND', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
                 
@@ -1636,6 +1633,7 @@ class SurveyConfiguration(object):
                         elif key == "SIFTING_MINIMUM_DM" :                           self.sifting_minimum_DM               = np.float(self.dict_survey_configuration[key])
                         elif key == "SIFTING_SIGMA_THRESHOLD" :                      self.sifting_sigma_threshold          = np.float(self.dict_survey_configuration[key])
                         elif key == "PREPFOLD_FLAGS" :                               self.prepfold_flags                   = self.dict_survey_configuration[key]
+                        elif key == "NUM_SIMULTANEOUS_DMS_PREPSUBBAND" :             self.num_simultaneous_dms_prepsubband = int(self.dict_survey_configuration[key])
                         elif key == "NUM_SIMULTANEOUS_FOLDS":                        self.num_simultaneous_folds           = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_KNOWN_PULSARS" :                      self.flag_fold_known_pulsars          = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_TIMESERIES" :                         self.flag_fold_timeseries             = int(self.dict_survey_configuration[key])
@@ -1657,7 +1655,17 @@ class SurveyConfiguration(object):
                 self.list_0DM_datfiles          = []
                 self.list_0DM_fftfiles          = []
                 self.list_0DM_fftfiles_rednoise = []
-                self.list_segments_nofull       = copy.deepcopy(self.list_segments); self.list_segments_nofull.remove("full")
+
+
+                if "full" in self.list_segments:
+                        self.list_segments_nofull       = copy.deepcopy(self.list_segments)
+                        self.list_segments_nofull.remove("full")
+                        self.flag_search_full = 1
+                else:
+                        self.list_segments_nofull       = copy.deepcopy(self.list_segments)
+                        self.flag_search_full =	0
+
+
 
                 
                 self.dict_chunks                = {}      # {'filename': {'20m':   [0,1,2]}}
@@ -1693,11 +1701,16 @@ def init_default(observation_filename):
         default_obs = "<observation>"
         if observation_filename != "":
                 default_obs = observation_filename
-                if psrfits.is_PSRFITS(observation_filename) == True:
-                        default_file_format = "psrfits"
-                        print "Input file '%s' seems to be PSRFITS. Setting default file format to 'psrfits'." % (observation_filename)
+                if observation_filename.endswith(".fil"):
+                        print "Input file '%s' seems to be FILTERBANK. Setting default file format to 'filterbank'." % (observation_filename)
+                        default_file_format = "filterbank"
+                elif observation_filename.endswith(".fits") or observation_filename.endswith(".sf"):
+                        if psrfits.is_PSRFITS(observation_filename) == True:
+                                default_file_format = "psrfits"
+                                print "Input file '%s' seems to be PSRFITS. Setting default file format to 'psrfits'." % (observation_filename)
                 else:
-                        print "Input file '%s' does not seem to be PSRFITS. Setting default file format to 'filterbank'." % (observation_filename)
+                        print
+                        print "WARNING: Cannot determine format of input file '%s'.... Setting default file format to 'filterbank'." % (observation_filename)
         else:
                 print "WARNING: Input observation file not provided. Setting default file format to 'filterbank'."
         try:                presto_path = os.environ['PRESTO']
@@ -1756,6 +1769,7 @@ def init_default(observation_filename):
                                                      'ACCELSEARCH_FLAGS':                   "\"\"             # Any additional options to give to ACCELSEARCH",         
                                                      'ACCELSEARCH_GPU_FLAGS':               "\"\"             # Any additional options to give to ACCELSEARCH of PRESTO_ON_GPU",
                                                      'PREPFOLD_FLAGS' :                     "\"-ncpus 4 -n 64\"     # Any additional options to give to PREPFOLD",
+                                                     'NUM_SIMULTANEOUS_DMS_PREPSUBBAND':    "1000            # Number of simultaneous DM values processed at once by PREPSUBBAND (max 1000) ",
                                                      'FLAG_REMOVE_FFTFILES':                "1               # Remove FFT files after searching to save disk space? (1=yes, 0=no)",
                                                      'FLAG_REMOVE_DATFILES_OF_SEGMENTS':    "0               # Remove .dat files of the shorter segments after searching to save disk space? (1=yes, 0=no)",
                                                      
@@ -1856,6 +1870,7 @@ def init_default(observation_filename):
                 f.write("%-35s %s\n" % ('FLAG_FOLD_TIMESERIES', dict_survey_configuration_default_values['FLAG_FOLD_TIMESERIES']))
                 f.write("%-35s %s\n" % ('FLAG_FOLD_RAWDATA', dict_survey_configuration_default_values['FLAG_FOLD_RAWDATA']))
                 f.write("%-35s %s\n" % ('NUM_SIMULTANEOUS_FOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_FOLDS']))
+                f.write("%-35s %s\n" % ('NUM_SIMULTANEOUS_DMS_PREPSUBBAND', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_DMS_PREPSUBBAND']))
                 f.write("\n")
                 f.write("# PIPELINE STEPS TO EXECUTE (1=do, 0=skip)\n")
                 f.write("%-35s %s\n" % ('STEP_RFIFIND', dict_survey_configuration_default_values['STEP_RFIFIND']))
@@ -2121,7 +2136,20 @@ for i in range(len(config.list_Observations)):
                                                     config.presto_env,
                                                     verbosity_level
                 )
-
+                mask = rfifind.rfifind(config.list_Observations[i].mask)
+                fraction_masked_channels = np.float(len(mask.mask_zap_chans))/mask.nchan
+                if verbosity_level >= 1:
+                        print
+                        print "RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.)
+                        print 
+                if fraction_masked_channels > 0.5:
+                        print
+                        print "************************************************************************************************"
+                        print "\033[1m !!! WARNING : %.2f%% of the band was masked! That seems quite a lot! \033[0m !!!" % (fraction_masked_channels * 100.)
+                        print "\033[1m !!! You may want to adjust the RFIFIND parameters in the configuration file (e.g. try to increase RFIFIND_FREQSIG) \033[0m"
+                        print "************************************************************************************************"
+                        time.sleep(10)
+        
         elif config.flag_step_rfifind == 0:
                 if verbosity_level >= 1:
                         print "STEP_RFIFIND = %s   ---> I will not create the mask, I will only look for the one already present in the 01_RFIFIND folder" % (config.flag_step_rfifind)
@@ -2141,20 +2169,7 @@ for i in range(len(config.list_Observations)):
                 
 
         
-
-        mask = rfifind.rfifind(config.list_Observations[i].mask)
-        fraction_masked_channels = np.float(len(mask.mask_zap_chans))/mask.nchan
-        if verbosity_level >= 1:
-                print
-                print "RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.)
-                print 
-        if fraction_masked_channels > 0.5:
-                print
-                print "************************************************************************************************"
-                print "\033[1m !!! WARNING : %.2f%% of the band was masked! That seems quite a lot! \033[0m !!!" % (fraction_masked_channels * 100.)
-                print "\033[1m !!! You may want to adjust the RFIFIND parameters in the configuration file (e.g. try to increase RFIFIND_FREQSIG) \033[0m"
-                print "************************************************************************************************"
-                time.sleep(10)
+        
                         
         weights_file = config.list_Observations[i].mask.replace(".mask", ".weights")
         if os.path.exists(weights_file):
@@ -2337,6 +2352,7 @@ if config.flag_step_dedisperse == 1:
                                                config.dm_min,
                                                config.dm_max,
                                                config.dm_coherent_dedispersion,
+                                               config.num_simultaneous_dms_prepsubband,
                                                config.list_Observations[i].freq_central_MHz,
                                                config.list_Observations[i].bw_MHz,
                                                config.list_Observations[i].nchan,
@@ -2364,11 +2380,15 @@ if config.flag_step_dedisperse == 1:
 
 
         # 2) LOOP OVER EACH SEGMENT
-                if "full" in config.dict_search_structure[obs].keys():
-                        list_segments = ['full'] + ["%sm" % (x) for x in sorted(config.list_segments_nofull)]
-                else:
-                        list_segments =  ["%sm" % (x) for x in sorted(config.list_segments_nofull)]
+                if not "full" in config.dict_search_structure[obs].keys():
+                        print "NOTICE: full-length observation will not be searched!"
+                        config.dict_search_structure[obs]['full'] = {'ck00': {'candidates': []}} 
+                list_segments = ['full'] + ["%sm" % (x) for x in sorted(config.list_segments_nofull)]
+                #else:
+                #        list_segments =  ["%sm" % (x) for x in sorted(config.list_segments)]
 
+
+                        
                 N_seg = len(list_segments)
                 for seg, i_seg in zip(list_segments, range(N_seg)):
                         work_dir_segment = os.path.join(work_dir_obs, "%s" % seg)
@@ -2419,6 +2439,7 @@ if config.flag_step_dedisperse == 1:
                                                                 work_dir_chunk,
                                                                 config.root_workdir,
                                                                 LOG_basename,
+                                                                config.flag_search_full,
                                                                 seg,
                                                                 ck,
                                                                 [i_seg, N_seg, i_ck, N_ck],
@@ -2564,12 +2585,12 @@ if config.flag_step_sifting == 1:
                 
                 for i_cand, dict_cand in zip(range(0, N_cands_all), sorted(list_all_cands, key=lambda k: k['cand'].p, reverse=False)):
                         if dict_cand['cand'].DM < 2:
-                                candidates_summary_file.write("Cand %4d/%d: %12.6f ms    |  DM: %7.2f pc cm-3    (%4s / %4s)  ---> Likely RFI\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'] ))
+                                candidates_summary_file.write("Cand %4d/%d: %12.6f ms    |  DM: %7.2f pc cm-3    (%4s / %4s | sigma: %5.2f)  ---> Likely RFI\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'], dict_cand['cand'].sigma ))
                         else:
                                 if dict_cand['is_known'] == True:
-                                        candidates_summary_file.write("Cand %4d/%d:  %12.6f ms  |  DM: %7.2f pc cm-3    (%4s / %4s)  ---> Likely %s - %s\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'], dict_cand['known_psrname'], dict_cand['str_harmonic']))
+                                        candidates_summary_file.write("Cand %4d/%d:  %12.6f ms  |  DM: %7.2f pc cm-3    (%4s / %4s | sigma: %5.2f)  ---> Likely %s - %s\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'], dict_cand['cand'].sigma, dict_cand['known_psrname'], dict_cand['str_harmonic']))
                                 elif dict_cand['is_known'] == False:
-                                        candidates_summary_file.write("Cand %4d/%d:  %12.6f ms  |  DM: %7.2f pc cm-3    (%4s / %4s)\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck']))
+                                        candidates_summary_file.write("Cand %4d/%d:  %12.6f ms  |  DM: %7.2f pc cm-3    (%4s / %4s | sigma: %5.2f)\n" % (i_cand+1, N_cands_all, dict_cand['cand'].p * 1000., dict_cand['cand'].DM, dict_cand['seg'], dict_cand['ck'], dict_cand['cand'].sigma))
 
                 
                 candidates_summary_file.close()

@@ -3,11 +3,6 @@
 import sys, os, os.path, glob, shutil
 import numpy as np
 
-import astrophysical_constants_cgs as astro_const
-import alex_search
-import alex_processes
-import alex_folding
-
 
 def check_if_already_known(P_cand_ms, numharm):
 
