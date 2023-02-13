@@ -2346,7 +2346,7 @@ if config.flag_step_dedisperse == 1:
         if verbosity_level >= 2:
                 print "done!"
                 print "get_DDplan_scheme(config.list_Observations[i].file_abspath, = ", config.list_Observations[i].file_abspath
-        LOG_basename = "03_DDplan_scheme"
+
         list_DDplan_scheme = get_DDplan_scheme(config.list_Observations[i].file_abspath,
                                                dir_dedispersion,
                                                LOG_basename,
