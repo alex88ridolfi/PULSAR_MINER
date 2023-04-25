@@ -1,233 +1,273 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-import sys, os, os.path, glob
+import sys
+import os
+import os.path
+import glob
 import numpy as np
-from presto import psrfits,filterbank
+from presto import psrfits, filterbank
 
 
-LIGHT_SPEED = 2.99792458e10                 #Speed of Light in cgs
-
-def calculate_angular_distance_in_rad( string_RA1,string_DEC1, string_RA2, string_DEC2):
-        if ":" in string_RA1:
-                array_RA1 = np.array(  string_RA1.split(":"), dtype='float64')
-                array_RA1_deg = 15.0 * array_RA1
-
-        if ":" in string_DEC1:
-                array_DEC1_deg = np.array(  string_DEC1.split(":"), dtype='float64')
-                if array_DEC1_deg[0] < 0:
-                        array_DEC1_deg[1] = -array_DEC1_deg[1]
-                        array_DEC1_deg[2] = -array_DEC1_deg[2]
+LIGHT_SPEED = 2.99792458e10  # Speed of Light in cgs
 
 
-        if ":" in string_RA2:
-                array_RA2 = np.array(  string_RA2.split(":"), dtype='float64')
-                array_RA2_deg =15.0 * array_RA2
-        if ":" in string_DEC2:
-                array_DEC2_deg = np.array(  string_DEC2.split(":"), dtype='float64')
-                if array_DEC2_deg[0] < 0:
-                        array_DEC2_deg[1] = -array_DEC2_deg[1]
-                        array_DEC2_deg[2] = -array_DEC2_deg[2]
-
-        RA1_deg = array_RA1_deg[0] + (1./60)*array_RA1_deg[1] + (1./3600)*array_RA1_deg[2]
-        RA1_rad = RA1_deg * np.pi/180.
-        RA2_deg = array_RA2_deg[0] + (1./60)*array_RA2_deg[1] + (1./3600)*array_RA2_deg[2]
-        RA2_rad = RA2_deg * np.pi/180.
-
-        DEC1_deg = array_DEC1_deg[0] + (1./60)*array_DEC1_deg[1] + (1./3600)*array_DEC1_deg[2]
-        DEC1_rad = DEC1_deg * np.pi/180.
-        DEC2_deg = array_DEC2_deg[0] + (1./60)*array_DEC2_deg[1] + (1./3600)*array_DEC2_deg[2]
-        DEC2_rad = DEC2_deg * np.pi/180.
-
-        delta_RA_rad = RA1_rad - RA2_rad
-
-        alpha_rad = np.arccos( np.cos(DEC1_rad)*np.cos(DEC2_rad) * np.cos(delta_RA_rad)  + np.sin(DEC1_rad)*np.sin(DEC2_rad) )
-
-        return alpha_rad
+def get_command_output(command, shell_state=False, work_dir=os.getcwd()):
+       list_for_Popen = command.split()
+       if shell_state == False:
+              proc = subprocess.Popen(list_for_Popen, stdout=subprocess.PIPE, shell=shell_state, cwd=work_dir)
+       else:
+              proc = subprocess.Popen([command], stdout=subprocess.PIPE, shell=shell_state, cwd=work_dir)
+       out, err = proc.communicate()
+              
+       return out.decode('ascii')
 
 
+def calculate_angular_distance_in_rad(string_RA1, string_DEC1, string_RA2, string_DEC2):
+       if ":" in string_RA1:
+              array_RA1 = np.array(string_RA1.split(":"), dtype='float64')
+              array_RA1_deg = 15.0 * array_RA1
+
+       if ":" in string_DEC1:
+              array_DEC1_deg = np.array(string_DEC1.split(":"), dtype='float64')
+              if array_DEC1_deg[0] < 0:
+                     array_DEC1_deg[1] = -array_DEC1_deg[1]
+                     array_DEC1_deg[2] = -array_DEC1_deg[2]
+
+       if ":" in string_RA2:
+              array_RA2 = np.array(string_RA2.split(":"), dtype='float64')
+              array_RA2_deg = 15.0 * array_RA2
+       if ":" in string_DEC2:
+              array_DEC2_deg = np.array(string_DEC2.split(":"), dtype='float64')
+              if array_DEC2_deg[0] < 0:
+                     array_DEC2_deg[1] = -array_DEC2_deg[1]
+                     array_DEC2_deg[2] = -array_DEC2_deg[2]
+
+       RA1_deg = array_RA1_deg[0] + (1./60)*array_RA1_deg[1] + (1./3600)*array_RA1_deg[2]
+       RA1_rad = RA1_deg * np.pi/180.
+       RA2_deg = array_RA2_deg[0] + (1./60)*array_RA2_deg[1] + (1./3600)*array_RA2_deg[2]
+       RA2_rad = RA2_deg * np.pi/180.
+
+       DEC1_deg = array_DEC1_deg[0] + (1./60)*array_DEC1_deg[1] + (1./3600)*array_DEC1_deg[2]
+       DEC1_rad = DEC1_deg * np.pi/180.
+       DEC2_deg = array_DEC2_deg[0] + (1./60)*array_DEC2_deg[1] + (1./3600)*array_DEC2_deg[2]
+       DEC2_rad = DEC2_deg * np.pi/180.
+       
+       delta_RA_rad = RA1_rad - RA2_rad
+
+       alpha_rad = np.arccos(np.cos(DEC1_rad)*np.cos(DEC2_rad) * np.cos(delta_RA_rad)  + np.sin(DEC1_rad)*np.sin(DEC2_rad))
+
+       return alpha_rad
 
 
 class Observation(object):
-        def __init__(self, file_name, data_type="psrfits", verbosity_level=1):
-                self.file_abspath = os.path.abspath(file_name)
-                self.file_nameonly = self.file_abspath.split("/")[-1]
-                self.file_basename, self.file_extension = os.path.splitext(self.file_nameonly)
+       def __init__(self, file_name, data_type="psrfits", verbosity_level=1):
+              self.file_abspath = os.path.abspath(file_name)
+              self.file_nameonly = self.file_abspath.split("/")[-1]
+              self.file_basename, self.file_extension = os.path.splitext(self.file_nameonly)
+              
+              if data_type == "psrfits":
+                     if verbosity_level >= 2:
+                            print("Reading PSRFITS....")
+                     if psrfits.is_PSRFITS(file_name) == True:
+                            if verbosity_level >= 2:
+                                   print(("File '%s' correctly recognized as PSRFITS" % (file_name)))
+                            object_file = psrfits.PsrfitsFile(self.file_abspath)
+                            self.bw_MHz = object_file.specinfo.BW
+                            self.N_samples = object_file.specinfo.N
+                            self.T_obs_s = object_file.specinfo.T
+                            self.backend = object_file.specinfo.backend
+                            self.nbits = object_file.specinfo.bits_per_sample
+                            self.date_obs = object_file.specinfo.date_obs
+                            self.dec_deg = object_file.specinfo.dec2000
+                            self.dec_str = object_file.specinfo.dec_str
+                            self.chanbw_MHz = object_file.specinfo.df
+                            self.t_samp_s = object_file.specinfo.dt
+                            self.freq_central_MHz = object_file.specinfo.fctr
+                            self.receiver = object_file.specinfo.frontend
+                            self.freq_high_MHz = object_file.specinfo.hi_freq
+                            self.freq_low_MHz = object_file.specinfo.lo_freq
+                            self.MJD_int = object_file.specinfo.mjd
+                            self.MJD_sec = object_file.specinfo.secs
+                            self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                            self.nchan = object_file.specinfo.num_channels
+                            self.observer = object_file.specinfo.observer
+                            self.project = object_file.specinfo.project_id
+                            self.ra_deg = object_file.specinfo.ra2000
+                            self.ra_str = object_file.specinfo.ra_str
+                            self.seconds_of_day = object_file.specinfo.secs
+                            self.source_name = object_file.specinfo.source
+                            self.telescope = object_file.specinfo.telescope
+                            self.RAJ_str = object_file.specinfo.ra_str
+                            self.DECJ_str = object_file.specinfo.dec_str
 
-                if data_type=="psrfits":
-                        if verbosity_level >= 2:
-                                print "Reading PSRFITS...."
-                        if psrfits.is_PSRFITS(file_name) == True:
-                                if verbosity_level >= 2:
-                                        print "File '%s' correctly recognized as PSRFITS" % (file_name)
-                                object_file = psrfits.PsrfitsFile(self.file_abspath)
-                                self.bw_MHz           = object_file.specinfo.BW
-                                self.N_samples        = object_file.specinfo.N
-                                self.T_obs_s          = object_file.specinfo.T
-                                self.backend          = object_file.specinfo.backend
-                                self.nbits            = object_file.specinfo.bits_per_sample
-                                self.date_obs         = object_file.specinfo.date_obs
-                                self.dec_deg          = object_file.specinfo.dec2000
-                                self.dec_str          = object_file.specinfo.dec_str
-                                self.chanbw_MHz       = object_file.specinfo.df
-                                self.t_samp_s         = object_file.specinfo.dt
-                                self.freq_central_MHz = object_file.specinfo.fctr
-                                self.receiver         = object_file.specinfo.frontend
-                                self.freq_high_MHz    = object_file.specinfo.hi_freq
-                                self.freq_low_MHz     = object_file.specinfo.lo_freq
-                                self.MJD_int          = object_file.specinfo.mjd
-                                self.MJD_sec          = object_file.specinfo.secs
-                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.)
-                                self.nchan            = object_file.specinfo.num_channels
-                                self.observer         = object_file.specinfo.observer
-                                self.project          = object_file.specinfo.project_id
-                                self.ra_deg           = object_file.specinfo.ra2000
-                                self.ra_str           = object_file.specinfo.ra_str
-                                self.seconds_of_day   = object_file.specinfo.secs
-                                self.source_name      = object_file.specinfo.source
-                                self.telescope        = object_file.specinfo.telescope
-                                self.RAJ_str          = object_file.specinfo.ra_str
-                                self.DECJ_str         = object_file.specinfo.dec_str
+                     else:
+                            print("Reading PSRFITS (header only)....")
+                            self.bw_MHz = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
+                            self.N_samples = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
+                            self.T_obs_s = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
+                            self.backend = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
+                            self.nbits = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
+                            self.chanbw_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
+                            self.t_samp_s = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
+                            self.freq_central_MHz = np.float(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
+                            self.receiver = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
+                            self.freq_high_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
+                            self.freq_low_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
+                            self.nchan = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
+                            self.MJD_int = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
+                            self.MJD_sec_int = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
+                            self.MJD_sec_frac = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
+                            self.MJD_sec = self.MJD_sec_int + self.MJD_sec_frac
+                            self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                            self.RAJ_str = get_command_output("vap -n -c ra %s" % (file_name)).split()[-1]
+                            self.DECJ_str = get_command_output("vap -n -c dec %s" % (file_name)).split()[-1]
 
-                        else:
-                                print "Reading PSRFITS (header only)...."
-                                self.bw_MHz           = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
-                                self.N_samples        = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
-                                self.T_obs_s          = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
-                                self.backend          = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
-                                self.nbits            = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
-                                self.chanbw_MHz       = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
-                                self.t_samp_s         = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
-                                self.freq_central_MHz = np.float(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
-                                self.receiver         = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
-                                self.freq_high_MHz    = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
-                                self.freq_low_MHz     = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
-                                self.nchan            = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
-                                self.MJD_int          = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
-                                self.MJD_sec_int      = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
-                                self.MJD_sec_frac     = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
-                                self.MJD_sec          = self.MJD_sec_int + self.MJD_sec_frac
-                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.)
-                                self.RAJ_str          = get_command_output("vap -n -c ra %s" % (file_name)).split()[-1]
-                                self.DECJ_str         = get_command_output("vap -n -c dec %s" % (file_name)).split()[-1]
+              elif data_type == "filterbank":
+                     try:
+                            object_file = filterbank.FilterbankFile(self.file_abspath)
 
-                elif data_type=="filterbank":
-                        try:
-                                object_file = filterbank.FilterbankFile(self.file_abspath)
+                            self.N_samples = object_file.nspec
+                            self.t_samp_s = object_file.dt
+                            self.T_obs_s = self.N_samples * self.t_samp_s
+                            self.nbits = object_file.header['nbits']
+                            self.nchan = object_file.nchan
+                            self.chanbw_MHz = object_file.header['foff']
+                            self.bw_MHz = self.nchan * self.chanbw_MHz
+                            self.freq_central_MHz = object_file.header['fch1'] + object_file.header['foff']*0.5*object_file.nchan
+                            self.freq_high_MHz = np.amax(object_file.freqs)
+                            self.freq_low_MHz = np.amin(object_file.freqs)
+                            self.MJD_int = int(object_file.header['tstart'])
+                            self.Tstart_MJD = object_file.header['tstart']
+                            
+                            src_raj = "%s" % str(object_file.header['src_raj'])
+                            src_dej = "%+f" % object_file.header['src_dej']
+                            
+                            if len(src_raj.split(".")[0]) < 6:
+                                   src_raj = "0"*(6-len(src_raj.split(".")[0])) + src_raj
 
-                                self.N_samples        = object_file.nspec
-                                self.t_samp_s         = object_file.dt
-                                self.T_obs_s          = self.N_samples * self.t_samp_s
-                                self.nbits            = object_file.header['nbits']
-                                self.nchan            = object_file.nchan
-                                self.chanbw_MHz       = object_file.header['foff']
-                                self.bw_MHz           = self.nchan * self.chanbw_MHz
-                                self.freq_central_MHz = object_file.header['fch1'] + object_file.header['foff']*0.5*object_file.nchan
-                                self.freq_high_MHz    = np.amax(object_file.freqs)
-                                self.freq_low_MHz     = np.amin(object_file.freqs)
-                                self.MJD_int          = int(object_file.header['tstart'])
-                                self.Tstart_MJD       = object_file.header['tstart']
+                            self.RAJ_str = "%s:%s:%s" % (src_raj[:2], src_raj[2:4], src_raj[4:])
+                            self.DECJ_str = "%s:%s:%s" % (src_dej[:3], src_dej[3:5], src_dej[5:])
+                            self.source_name = object_file.header['source_name'].strip()
 
-                                src_raj = "%s" % str(object_file.header['src_raj'])
-                                src_dej = "%+f"% object_file.header['src_dej']
-                                
-                                if len(src_raj.split(".")[0]) < 6:
-                                        src_raj = "0"*(6-len(src_raj.split(".")[0])) + src_raj 
-                                
-                                self.RAJ_str          = "%s:%s:%s" % (src_raj[:2], src_raj[2:4], src_raj[4:])
-                                self.DECJ_str         = "%s:%s:%s" % (src_dej[:3], src_dej[3:5], src_dej[5:])
-                                self.source_name      = object_file.header['source_name'].strip()
-                                
-                                
-                        except ValueError:
-                                if verbosity_level >= 1:
-                                        print "WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information..."
-                                        
-                                        self.N_samples        = np.abs(int(    get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
-                                        self.t_samp_s         = np.float(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) *1.0e-6
-                                        self.T_obs_s          = np.float(      get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
-                                        self.nbits            = int(           get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
-                                        self.nchan            = int(           get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
-                                        self.chanbw_MHz       = np.fabs(np.float(       get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
-                                        self.bw_MHz           = self.chanbw_MHz*self.nchan
-                                        self.backend          = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                        self.Tstart_MJD              = np.float(      get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
-                                        self.freq_high_MHz    = np.float(      get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
-                                        self.freq_central_MHz = self.freq_high_MHz -0.5*self.bw_MHz
-                                        self.freq_low_MHz     = self.freq_high_MHz - self.bw_MHz
-                                        
- 
+                     except ValueError:
+                            if verbosity_level >= 1:
+                                   print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information...")
+
+                                   self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]))
+                                   self.t_samp_s         = np.float(get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
+                                   self.T_obs_s = np.float(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
+                                   self.nbits = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
+                                   self.nchan = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
+                                   self.chanbw_MHz = np.fabs(np.float(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
+                                   self.bw_MHz = self.chanbw_MHz*self.nchan
+                                   self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
+                                   self.Tstart_MJD = np.float(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                   self.freq_high_MHz = np.float(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
+                                   self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
+                                   self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
+
+
 outfilename = ""
 
 N_top_closest_beams = -1
+max_dist_arcsec = -1
+dest = ""
 
-#SHELL ARGUMENTS
+flag_make_rsync_script = 0
+
+# SHELL ARGUMENTS
 if (len(sys.argv) == 1):
-        print "USAGE: %s -beams \"*.fil\" -coord \"RA,DEC\" -n N" % (os.path.basename(sys.argv[0]))
-        exit()
+       print(("USAGE: %s -beams \"*.fil\" -coord \"RA,DEC\" {-n N | -max_dist_arcsec 60} [-make_rsync_script \"dest\"]" % (os.path.basename(sys.argv[0]))))
+       exit()
 else:
-        for j in range(1, len(sys.argv)):
-                if (sys.argv[j] == "-beams"):
-                        string_beams = sys.argv[j+1]
-                        if ("*" in string_beams) or ("?" in string_beams):
-                                list_beams = sorted(glob.glob(string_beams.strip("\"")))
-                        else:
-                                list_beams = string_beams.split(",")
+       for j in range(1, len(sys.argv)):
+              if (sys.argv[j] == "-beams"):
+                     string_beams = sys.argv[j+1]
+                     if ("*" in string_beams) or ("?" in string_beams):
+                            list_beams = sorted(glob.glob(string_beams.strip("\"")))
+                     else:
+                            list_beams = string_beams.split(",")
 
-                elif (sys.argv[j] == "-coord"):
-                        RA2,DEC2 = sys.argv[j+1].replace(" ","").split(",")
+              elif (sys.argv[j] == "-coord"):
+                     RA2, DEC2 = sys.argv[j+1].replace(" ", "").split(",")
+                     
+              elif (sys.argv[j] == "-n"):
+                     N_top_closest_beams = int(sys.argv[j+1])
+                     
+              elif (sys.argv[j] == "-max_dist_arcsec"):
+                     max_dist_arcsec = np.float(sys.argv[j+1])
 
-                elif (sys.argv[j] == "-n"):
-                        N_top_closest_beams = int(sys.argv[j+1])
+              elif (sys.argv[j] == "-make_rsync_script"):
+                     flag_make_rsync_script = 1
+                     dest = sys.argv[j+1]
 
-                        
-N_beams = len(list_beams) 
+
+N_beams = len(list_beams)
 
 list_beams_dicts = []
-
+list_files_to_rsync = []
 
 for i in range(N_beams):
-        rawfilename = list_beams[i]
+       rawfilename = list_beams[i]
 
-        if rawfilename.endswith(".fil"):
-                rawfile = Observation(rawfilename, data_type="filterbank")
-        elif rawfilename.endswith(".fits") or rawfilename.endswith(".sd"):
-                rawfile = Observation(rawfilename, data_type="psrfits")
+       if rawfilename.endswith(".fil"):
+              rawfile = Observation(rawfilename, data_type="filterbank")
+       elif rawfilename.endswith(".fits") or rawfilename.endswith(".sd"):
+              rawfile = Observation(rawfilename, data_type="psrfits")
+              
+       RA1 = rawfile.RAJ_str
+       DEC1 = rawfile.DECJ_str
 
-        RA1               = rawfile.RAJ_str
-        DEC1              = rawfile.DECJ_str
+       # print "File: %20s  |  POS1: %15s %15s  -- POS2: %15s %15s" % (rawfilename, RA1, DEC1, RA2, DEC2),
+       
+       # print
+       # print "%10s:    %-15s" % ("RA2", RA2)
+       # print "%10s:   %-15s" % ("DEC2", DEC2)
+       # print
 
+       distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
+       distance_arcmin = distance_deg*60.
+       distance_arcsec = distance_deg*60*60
+       
+       # print "----> Distance: %.8f deg" % (distance_deg),
+
+       # if distance_deg < 1.0:
+              # print " = %.6f arcmin" % (distance_arcmin),
+       # if distance_deg < 1./60:
+       #        print " = %.6f arcsec" % (distance_arcsec),
+       # print
         
-        #print "File: %20s  |  POS1: %15s %15s  -- POS2: %15s %15s" % (rawfilename, RA1, DEC1, RA2, DEC2),
+       list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec})
 
-        #print
-        #print "%10s:    %-15s" % ("RA2", RA2)
-        #print "%10s:   %-15s" % ("DEC2", DEC2)
-        #print
+       list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
 
-
-        distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
-        distance_arcmin = distance_deg*60.
-        distance_arcsec = distance_deg*60*60
-
-        #print "----> Distance: %.8f deg" % (distance_deg),
-
-        #if distance_deg < 1.0:
-                #print " = %.6f arcmin" % (distance_arcmin),
-        #if distance_deg < 1./60:
-                #print " = %.6f arcsec" % (distance_arcsec),
-        #print
-
-        list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec })
-
-
-        list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
-        
 if N_top_closest_beams == -1:
-        N_top_closest_beams = len(list_beams_dicts)
-        
-for i in range(N_top_closest_beams):
-        print "Beam %4d/%d:   %s    --->  distance from (%s,%s): %10.3f  arcsec" % (i+1, len(list_beams_dicts), list_beams_dicts[i]['rawfilename'], RA2,DEC2, list_beams_dicts[i]['distance_arcsec'])
-        
+       N_top_closest_beams = len(list_beams_dicts)
+
+
+if max_dist_arcsec > 0:
+       for i in range(N_top_closest_beams):
+              dist_arcsec = list_beams_dicts[i]['distance_arcsec']
+              filename = list_beams_dicts[i]['rawfilename']
+              if dist_arcsec <= max_dist_arcsec:
+                     print("Beam %60s: dist = %8.2f  arcsec" % (filename, dist_arcsec))
+                     list_files_to_rsync.append(filename)
+else:
+       if N_top_closest_beams == -1:
+              N_top_closest_beams = len(list_beams_dicts)
+
+       for i in range(N_top_closest_beams):
+              filename = list_beams_dicts[i]['rawfilename']
+              print(("Beam %4d/%d:   %60s    --->  distance from (%s,%s): %10.3f  arcsec" % (i+1, len(list_beams_dicts), filename, RA2, DEC2, list_beams_dicts[i]['distance_arcsec'])))
+              list_files_to_rsync.append(filename)
+
+
+if flag_make_rsync_script == 1:
+       with open("rsync_script.txt", "w") as rsync_script_file:
+              rsync_script_file.write("rsync -avrzP \\\n")
+              rsync_script_file.write("%s \\\n" % (" \\\n".join(list_files_to_rsync)))
+              rsync_script_file.write("%s\n" % (dest))
+              
+              print()
+              print("Written rsync script '%s'." % ("rsync_script.txt"))
 exit()
-
-

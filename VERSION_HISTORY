@@ -1,5 +1,9 @@
+Version 2.0  (22Sep2021)
+- Switched to Python 3
+- FLAG_REMOVE_DATFILES_OF_SEGMENTS = 1 by default
+
 ******************************
-Version 1.1.6 (17May2021)
+Version 1.1.6-dev (17May2021)
 - Added "pm_get_closest_beams" tool
 - Fixed bug that made the code stall when doing -init_default with a filterbank input file
 - Searching of the full-length data is now not mandatory

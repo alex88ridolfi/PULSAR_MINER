@@ -1,191 +1,192 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #################### ALESSANDRO RIDOLFI ########################
 #                        Version 1.2                           #
 #               Bonn, Nov2017- Cagliari, Apr2020               #
-################################################################    
+################################################################
 
-import sys, os, os.path, time, datetime, glob
+import sys
+import os
+import os.path
+import time
+import datetime
+import glob
 import subprocess
 from multiprocessing.pool import ThreadPool
 
+
+def execute_and_log_bash(command, work_dir, id_num, flag_log=1):
+       print("BASH COMMAND: %s" % command)
+       datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+       datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
+       time_start = time.time()
+       if "/" in command.split()[0]:
+              command_label = command.split("/")[-1].split()[0]
+       else:
+              command_label = command.split()[0]
+              
+       for i in range(len(list_for_Popen)):
+              current_piece = list_for_Popen[i]
+
+              if "?" in current_piece or "*" in current_piece:
+                     print("ci sono = ", current_piece)
+                     print("sorted(glob.glob(current_piece)) = ", sorted(glob.glob(current_piece)))
+                     new_list_for_Popen = list_for_Popen[:i] + sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
+                     
+                     print("new_list_for_Popen = ", new_list_for_Popen)
+                     list_for_Popen = new_list_for_Popen
+
+       if flag_log == 1:
+              # print "execute_and_log:: flag_log==1"
+              log_filename = "LOG_%03d_%s_%s.txt" % (int(id_num), command_label, datetime_start_single_string)
+              print("LOG: %s" % log_filename)
+              log_file = open(log_filename, "w+")
+              log_file.write("****************************************************************\n")
+              log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
+              log_file.write("\nCOMMAND:\n")
+              log_file.write("%s\n\n" % (command))
+              log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
+              log_file.write("****************************************************************\n")
+              log_file.flush()
+              # print "execute_and_log:: I have written the beginning of the log file\"%s\"" % (log_filename); sys.stdout.flush()
+              #proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
+              command_logged = "%s 2>&1 %s" % (command, log_filename)
+              print("NOW EXECUTING: %s" % (command_logged))
+              os.system(command_logged)
+       elif flag_log == 0:
+              # print "execute_and_log:: flag_log==0"
+              proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
+              os.system(command)
+       # print "execute_and_log: Finished: %s" % (command); sys.stdout.flush()
+       datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+       time_end = time.time()
+       
+       log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
+       log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
+       log_file.close()
+       
+
+def execute_and_log(command, work_dir, id_num, flag_log=1):
+       # print "COMMAND: %s" % command
+       datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+       datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
+       time_start = time.time()
+       if "/" in command.split()[0]:
+              command_label = command.split("/")[-1].split()[0]
+       else:
+              command_label = command.split()[0]
+       list_for_Popen = command.split()
+       
+       for i in range(len(list_for_Popen)):
+              current_piece = list_for_Popen[i]
+              
+              if "?" in current_piece or "*" in current_piece:
+                     # print "sorted(glob.glob(current_piece)) = ", sorted(glob.glob(current_piece))
+                     new_list_for_Popen = list_for_Popen[:i] + sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
+                     # print "new_list_for_Popen = ", new_list_for_Popen
+                     list_for_Popen = new_list_for_Popen
+                     
+       if flag_log == 1:
+              # print "execute_and_log:: flag_log==1"
+              log_filename = "LOG_%03d_%s_%s.txt" % (int(id_num), command_label, datetime_start_single_string)
+              print("LOG: %s" % log_filename)
+              log_file = open(log_filename, "w+")
+              log_file.write("****************************************************************\n")
+              log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
+              log_file.write("\nCOMMAND:\n")
+              log_file.write("%s\n\n" % (command))
+              log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
+              log_file.write("****************************************************************\n")
+              log_file.flush()
+              # print "execute_and_log:: I have written the beginning of the log file\"%s\"" % (log_filename); sys.stdout.flush()
+              proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
+       elif flag_log == 0:
+              # print "execute_and_log:: flag_log==0"
+              proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
+       proc.communicate()  # Wait for the process to complete
+       # print "execute_and_log: Finished: %s" % (command); sys.stdout.flush()
+       datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+       time_end = time.time()
+       
+       log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
+       log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
+       log_file.close()
+       
+
+# ARGOMENTI DA SHELL
+string_version = "1.2 (28Nov2018)"
+flag_background = 0
 
 cmdfile = ""
 flag_log = 1
 flag_bash = 0
 ncpus = 1
-
-def execute_and_log_bash(command, work_dir, id_num, flag_log=1):
-        print "BASH COMMAND: %s" % command
-        datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
-        datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
-        time_start = time.time()
-        if "/" in command.split()[0]:
-                command_label = command.split("/")[-1].split()[0]
-        else:
-                command_label = command.split()[0]
-
-        for i in range(len(list_for_Popen)):
-                current_piece = list_for_Popen[i]
-        
-                if "?" in current_piece or "*" in current_piece:
-                        print "ci sono = ", current_piece
-                        print "sorted(glob.glob(current_piece)) = ", sorted(glob.glob(current_piece))
-                        new_list_for_Popen  = list_for_Popen[:i] +  sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
-                        
-                        print "new_list_for_Popen = ", new_list_for_Popen
-                        list_for_Popen = new_list_for_Popen
-                                                                                                                                                                                                
-
-        if flag_log==1:
-                #print "execute_and_log:: flag_log==1"
-                log_filename = "LOG_%03d_%s_%s.txt" % (int(id_num), command_label,datetime_start_single_string )
-                print "LOG: %s" % log_filename
-                log_file = open(log_filename, "w+")
-                log_file.write("****************************************************************\n")
-                log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
-                log_file.write("\nCOMMAND:\n")
-                log_file.write("%s\n\n" % (command))
-                log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
-                log_file.write("****************************************************************\n")
-                log_file.flush()
-                #print "execute_and_log:: I have written the beginning of the log file\"%s\"" % (log_filename); sys.stdout.flush()
-                #proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
-                command_logged = "%s 2>&1 %s" % (command, log_filename)
-                print "NOW EXECUTING: %s" % (command_logged)
-                os.system(command_logged)
-        elif flag_log==0:
-                #print "execute_and_log:: flag_log==0"
-                proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
-                os.system(command)
-        #print "execute_and_log: Finished: %s" % (command); sys.stdout.flush()
-        datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
-        time_end = time.time()
-
-        log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
-        log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
-        log_file.close()
+sleep_time_s = 0.1
 
 
-
-def execute_and_log(command, work_dir, id_num, flag_log=1):
-        #print "COMMAND: %s" % command
-        datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
-        datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
-        time_start = time.time()
-        if "/" in command.split()[0]:
-                command_label = command.split("/")[-1].split()[0]
-        else:
-                command_label = command.split()[0]
-        list_for_Popen = command.split()
-
-        for i in range(len(list_for_Popen)):
-                current_piece = list_for_Popen[i]
-                
-                if "?" in current_piece or "*" in current_piece:
-                        
-                        #print "sorted(glob.glob(current_piece)) = ", sorted(glob.glob(current_piece))
-                        new_list_for_Popen  = list_for_Popen[:i] +  sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
-                        
-                        #print "new_list_for_Popen = ", new_list_for_Popen
-                        list_for_Popen = new_list_for_Popen
-
-
-        
-        if flag_log==1:
-                #print "execute_and_log:: flag_log==1"
-                log_filename = "LOG_%03d_%s_%s.txt" % (int(id_num), command_label,datetime_start_single_string )
-                print "LOG: %s" % log_filename
-                log_file = open(log_filename, "w+")
-                log_file.write("****************************************************************\n")
-                log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
-                log_file.write("\nCOMMAND:\n")
-                log_file.write("%s\n\n" % (command))
-                log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
-                log_file.write("****************************************************************\n")
-                log_file.flush()
-                #print "execute_and_log:: I have written the beginning of the log file\"%s\"" % (log_filename); sys.stdout.flush()
-                proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
-        elif flag_log==0:
-                #print "execute_and_log:: flag_log==0"
-                proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
-        proc.communicate()  #Wait for the process to complete                                                                                                                                                                       
-        #print "execute_and_log: Finished: %s" % (command); sys.stdout.flush()
-        datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
-        time_end = time.time()
-
-        log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
-        log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
-        log_file.close()
-
-
-
-#ARGOMENTI DA SHELL
-string_version = "1.2 (28Nov2018)"
-flag_background = 0
 
 if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
-    print "Usage: %s -cmdfile \"commands.sh\" -ncpus N [-nolog] -background"  % (os.path.basename(sys.argv[0]))
-    exit()
+       print("Usage: %s -cmdfile \"commands.sh\" -ncpus N [-nolog] [-background] [-sleep_time [s] ] " % (os.path.basename(sys.argv[0])))
+       exit()
 elif (("-version" in sys.argv) or ("--version" in sys.argv)):
-    print "Version: %s" % (string_version)
-    exit()
+       print("Version: %s" % (string_version))
+       exit()
 else:
-	for j in range( 1, len(sys.argv)):
-                if  (sys.argv[j] == "-cmdfile"):
-			cmdfile_name = sys.argv[j+1]
-                elif  (sys.argv[j] == "-ncpus"):
-			ncpus = int(sys.argv[j+1])
-                elif  (sys.argv[j] == "-nolog"):
-			flag_log = 0
-                elif  (sys.argv[j] == "-background"):
-			flag_background = 1
-                elif  (sys.argv[j] == "-bash"):
-			flag_bash = 1
-                
+       for j in range(1, len(sys.argv)):
+              if (sys.argv[j] == "-cmdfile"):
+                     cmdfile_name = sys.argv[j+1]
+              elif (sys.argv[j] == "-ncpus"):
+                     ncpus = int(sys.argv[j+1])
+              elif (sys.argv[j] == "-nolog"):
+                     flag_log = 0
+              elif (sys.argv[j] == "-background"):
+                     flag_background = 1
+              elif (sys.argv[j] == "-bash"):
+                     flag_bash = 1
+              elif (sys.argv[j] == "-sleep_time"):
+                     sleep_time_s = float(sys.argv[j+1])
 
-list_commands = []          
-list_work_dirs = []              
+
+list_commands = []
+list_work_dirs = []
 cmdfile = open(cmdfile_name, "r")
 
 for line in cmdfile:
-        if not line.strip().startswith("#") and line!="\n":
-                if line.startswith("work_dir="):
-                        list_line = line.strip().split()
-                        list_work_dirs.append( list_line[0].split("=")[-1]  )
-                        list_commands.append(  " ".join(list_line[1:])  )
-                else:
-                        list_work_dirs.append( os.getcwd() )
-                        list_commands.append(line.strip())
+       if not line.strip().startswith("#") and line !="\n":
+              if line.startswith("work_dir="):
+                     list_line = line.strip().split()
+                     list_work_dirs.append(list_line[0].split("=")[-1]  )
+                     list_commands.append(" ".join(list_line[1:])  )
+              else:
+                     list_work_dirs.append(os.getcwd() )
+                     list_commands.append(line.strip())
 
-print
-print "#"*62
-print "#" + " "*15 + "PSRALEX - %-20s" % (os.path.basename(sys.argv[0])) + " "*15 + "#"
-print "#"*62
-print
-print
-print "Commands to execute in %d threads:" % (ncpus)
-print
+print()
+print("#"*62)
+print("#" + " "*15 + "PSRALEX - %-20s" % (os.path.basename(sys.argv[0])) + " "*15 + "#")
+print("#"*62)
+print()
+print()
+print("Commands to execute in %d threads:" % (ncpus))
+print()
 for i in range(len(list_commands)):
-    print "%3d) %s " % (i, list_commands[i])
-print
-
-
+       print("%3d) %s " % (i, list_commands[i]))
+print()
 
 
 TP = ThreadPool(ncpus)
 for i in range(len(list_commands)):
-        time.sleep(0.1)
-        if flag_bash == 1:
-                TP.apply_async( execute_and_log_bash, (list_commands[i], list_work_dirs[i], i, flag_log) )
-        else:
-                TP.apply_async( execute_and_log, (list_commands[i], list_work_dirs[i], i, flag_log) )
-
+       time.sleep(sleep_time_s)
+       if flag_bash == 1:
+              TP.apply_async(execute_and_log_bash, (list_commands[i], list_work_dirs[i], i, flag_log) )
+       else:
+              TP.apply_async(execute_and_log, (list_commands[i], list_work_dirs[i], i, flag_log) )
+               
 if flag_background == 0:
-        TP.close()
-        TP.join()
-        print 
-        print "%d commands completed!" % (len(list_commands))
+       TP.close()
+       TP.join()
+       print()
+       print("%d commands completed!" % (len(list_commands)))
 else:
-        print
-        print "Processes are now running in background."
+       print()
+       print("Processes are now running in background.")

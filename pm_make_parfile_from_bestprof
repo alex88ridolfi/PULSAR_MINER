@@ -1,51 +1,77 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import sys, os, os.path, glob, shutil, subprocess, time
+import sys
+import os
+import os.path
+import glob
+import shutil
+import subprocess
 import numpy as np
-from presto import psrfits,filterbank
+from presto import psrfits, filterbank
 
 
-LIGHT_SPEED = 2.99792458e10                 #Speed of Light in cgs
+LIGHT_SPEED = 2.99792458e10  # Speed of Light in cgs
 
-dict_obs_sites = {'1':"gbt" , '2':"atca", '3':"ao",'4':"hobart",'5':"nanshan",'6':"tid43",'7':"pks",'8':"jb",'c':"vla",'f':"ncy",'g':"eff",'q':"jbdfb",'i':"wsrt",'t':"lofar",'w':"ncyobs",'x':"lwa1",'z':"srt", 'm':"meerkat"}
+dict_obs_sites = {'1': "gbt", '2': "atca", '3': "ao", '4': "hobart", '5': "nanshan", '6': "tid43", '7': "pks", '8': "jb", 'c': "vla", 'f': "ncy", 'g': "eff", 'q': "jbdfb", 'i': "wsrt", 't': "lofar", 'w': "ncyobs", 'x': "lwa1", 'z': "srt", 'm': "meerkat", 'k': 'fast'}
 
-dict_obs_parfilecodes  = {'1':"GB", '2':"QU", '3':"AO", '4':"HO", '5':"PR", '6':"VL", '7':"PK", '8':"JB", '9':"G3", 'a':"G1", 'b':"G8", 'c':"V2", 'd':"BO", 'e':"MO", 'f':"NC", 'g':"EF", 'h':"J2", 'i':"WS", 'k':"FA", 'm':"MK", 'r':"GM", 's':"SH", 't':"LF", 'u':"MW", 'v':"PV", 'x':"LW", 'y':"CH", 'z':"SR", '-':"LS"}
+dict_obs_parfilecodes = {'1': "GB", '2': "QU", '3': "AO", '4': "HO", '5': "PR", '6': "VL", '7': "PK", '8': "JB", '9': "G3", 'a': "G1", 'b': "G8", 'c': "V2", 'd': "BO", 'e': "MO", 'f': "NC", 'g': "EF", 'h': "J2", 'i': "WS", 'k': "FA", 'm': "MK", 'r': "GM", 's': "SH", 't': "LF", 'u': "MW", 'v': "PV", 'x': "LW", 'y': "CH", 'z': "SR", '-': "LS"}
+
+def get_command_output(command, shell_state=False, work_dir=os.getcwd()):
+        list_for_Popen = command.split()
+        if shell_state == False:
+                proc = subprocess.Popen(list_for_Popen, stdout=subprocess.PIPE, shell=shell_state, cwd=work_dir)
+        else:
+                proc = subprocess.Popen([command], stdout=subprocess.PIPE, shell=shell_state, cwd=work_dir)
+        out, err = proc.communicate()
+        return out.decode('ascii')
+
+def get_command_output_with_pipe(command1, command2):
+        list_for_Popen_cmd1 = command1.split()
+        list_for_Popen_cmd2 = command2.split()
+        
+        p1 = subprocess.Popen(list_for_Popen_cmd1, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(list_for_Popen_cmd2, stdin=p1.stdout, stdout=subprocess.PIPE)
+        p1.stdout.close()
+        
+        out, err = p2.communicate()
+        return out.decode('ascii')
+
 
 def convert_obs_name_to_T1_id(obs_name):
-        if obs_name=="GBT":                                     flag_T1="1"
-        elif obs_name=="Arecibo":                               flag_T1="3"
-        elif obs_name=="Hobart":                                flag_T1="4"
-        elif obs_name=="Parkes":                                flag_T1="7"
-        elif obs_name=="Jodrell Bank":                          flag_T1="8"
-        elif obs_name=="Nancay":                                flag_T1="f"
-	elif obs_name=="Effelsberg":                            flag_T1="g"
-        elif obs_name=="WSRT":                                  flag_T1="i"
-        elif obs_name=="LOFAR":                                 flag_T1="t"
-        elif obs_name=="LWA1":                                  flag_T1="x"
-        elif obs_name=="Sardinia Radio Telescope":              flag_T1="z"
-        elif obs_name=="MeerKAT":                               flag_T1="m"
+        if obs_name == "GBT":                                     flag_T1 = "1"
+        elif obs_name == "Arecibo":                               flag_T1 = "3"
+        elif obs_name == "Hobart":                                flag_T1 = "4"
+        elif obs_name == "Parkes":                                flag_T1 = "7"
+        elif obs_name == "Jodrell Bank":                          flag_T1 = "8"
+        elif obs_name == "Nancay":                                flag_T1 = "f"
+        elif obs_name == "Effelsberg":                            flag_T1 = "g"
+        elif obs_name == "WSRT":                                  flag_T1 = "i"
+        elif obs_name == "LOFAR":                                 flag_T1 = "t"
+        elif obs_name == "LWA1":                                  flag_T1 = "x"
+        elif obs_name == "Sardinia Radio Telescope":              flag_T1 = "z"
+        elif obs_name == "MeerKAT":                               flag_T1 = "m"
+        elif obs_name == "FAST":                                  flag_T1 = "k"
 
         return flag_T1
 
 
+dict_param_formatters = {'PSR': "{:<17s}", 'RAJ': "{:<9s}", 'DECJ': "{:<9s}", 'PMRA': "{:<19s}", 'PMDEC': "{:<19s}", 'PX': "{:<20s}", 'F0': "{:<6s}", 'F1': "{:<8s}", 'F2': "{:<8s}", 'F3': "{:<8s}", 'F4': "{:<8s}", 'F5': "{:<8s}", 'PEPOCH': "{:<14s}", 'START': "{:<17s}", 'FINISH': "{:<17s}", 'DM': "{:<17s}", 'DMEPOCH': "{\
+:<15s}", 'SOLARN0': "{:<21s}", 'EPHEM': "{:<20s}", 'CLK': "{:<20s}", 'UNITS': "{:<20s}", 'TIMEEPH': "{:<20s}", 'T2CMETHOD': "{:<20s}", 'CORRECT_TROPOSPHERE': "{:<20s}", 'PLANET_SHAPIRO': "{:<20s}", 'DILATEFREQ': "{:<20s}", 'NTOA': "{:<23s}", 'TRES': "{:<21s}", 'TZRMJD': "{:<8s}", 'TZRFRQ': "{:<18s}", 'TZRSITE': "{:<25s}\
+", 'NITS': "{:<23s}", 'BINARY': "{:<18s}", 'A1': "{:<15s}", 'E': "{:<14s}", 'T0': "{:<10s}", 'TASC': "{:<10s}", 'OM': "{:<10s}", 'PB': "{:<12s}", 'FB0': "{:<7s}", 'FB1': "{:<7s}", 'FB2': "{:<7s}", 'FB3': "{:<7s}", 'FB4': "{:<7s}", 'FB5': "{:<7s}", 'FB6': "{:<7s}", 'FB7': "{:<7s}", 'FB8': "{:<7s}", 'FB9': "{:<7s}", 'FB10':
+"{:<7s}", 'FB11': "{:<7s}", 'FB12': "{:<7s}", 'FB13': "{:<7s}", 'GAMMA': "{:<17s}", 'PBDOT': "{:<17s}", 'OMDOT': "{:<17s}", 'SINI': "{:<18s}", 'MTOT': "{:<18s}", 'M2': "{:<18s}", 'EPS1': "{:<18s}", 'EPS2': "{:<18s}"}
 
-dict_param_formatters = {'PSR': "{:<17s}",'RAJ': "{:<9s}", 'DECJ': "{:<9s}",'PMRA': "{:<19s}",'PMDEC': "{:<19s}",'PX': "{:<20s}",'F0': "{:<6s}",'F1': "{:<8s}",'F2': "{:<8s}",'F3': "{:<8s}",'F4': "{:<8s}",'F5': "{:<8s}",'PEPOCH': "{:<14s}",'START': "{:<17s}",'FINISH': "{:<17s}",'DM': "{:<17s}",'DMEPOCH': "{\
-:<15s}",'SOLARN0': "{:<21s}",'EPHEM': "{:<20s}",'CLK': "{:<20s}",'UNITS': "{:<20s}",'TIMEEPH': "{:<20s}",'T2CMETHOD': "{:<20s}",'CORRECT_TROPOSPHERE': "{:<20s}",'PLANET_SHAPIRO': "{:<20s}",'DILATEFREQ': "{:<20s}",'NTOA': "{:<23s}",'TRES': "{:<21s}",'TZRMJD': "{:<8s}",'TZRFRQ': "{:<18s}",'TZRSITE': "{:<25s}\
-",'NITS': "{:<23s}",'BINARY': "{:<18s}",'A1': "{:<15s}",'E': "{:<14s}",'T0': "{:<10s}", 'TASC': "{:<10s}", 'OM': "{:<10s}",'PB': "{:<12s}",'FB0': "{:<7s}",'FB1': "{:<7s}",'FB2': "{:<7s}",'FB3': "{:<7s}",'FB4': "{:<7s}",'FB5': "{:<7s}",'FB6': "{:<7s}",'FB7': "{:<7s}",'FB8': "{:<7s}",'FB9': "{:<7s}",'FB10': \
-"{:<7s}",'FB11': "{:<7s}",'FB12': "{:<7s}",'FB13': "{:<7s}",'GAMMA': "{:<17s}",'PBDOT': "{:<17s}",'OMDOT': "{:<17s}",'SINI': "{:<18s}",'MTOT': "{:<18s}",'M2': "{:<18s}",'EPS1': "{:<18s}",'EPS2': "{:<18s}"}
+list_ordered_params_general = ['PSR',  'RAJ',  'DECJ', 'PMRA', 'PMDEC', 'PX', 'F0',   'F1',   'F2',   'F3',   'F4',   'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',  'PEPOCH',   'START', 'FINISH', 'DM', 'GLEP_1', 'GLPH_1', 'GLF0_1', 'GLF1_1', 'GLF0D_1', 'GLTD_1', 'GLEP_2', 'GLPH_2', 'GLF0_2', 'GLF1_2', 'GLF0D_2', 'GLTD_2', 'GLEP_3', 'GLPH_3', 'GLF0_3', 'GLF1_3', 'GLF0D_3', 'GLTD_3', 'DMEPOCH',   'SOLARN0', 'EPHEM', 'CLK', 'UNITS', 'TIMEEPH', 'T2CMETH OD', 'CORRECT_TROPOSPHERE', 'PLANET_SHAPIRO', 'DILATEFREQ', 'NTOA', 'TRES', 'TZRMJD', 'TZRFRQ', 'TZRSITE', 'NITS']
 
-list_ordered_params_general = [ 'PSR',  'RAJ',  'DECJ', 'PMRA', 'PMDEC','PX','F0',   'F1',   'F2',   'F3',   'F4',   'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',  'PEPOCH',   'START', 'FINISH', 'DM', 'GLEP_1', 'GLPH_1', 'GLF0_1', 'GLF1_1', 'GLF0D_1', 'GLTD_1', 'GLEP_2', 'GLPH_2', 'GLF0_2', 'GLF1_2', 'GLF0D_2', 'GLTD_2', 'GLEP_3', 'GLPH_3', 'GLF0_3', 'GLF1_3', 'GLF0D_3', 'GLTD_3', 'DMEPOCH',   'SOLARN0','EPHEM','CLK','UNITS','TIMEEPH','T2CMETH OD','CORRECT_TROPOSPHERE','PLANET_SHAPIRO','DILATEFREQ','NTOA', 'TRES','TZRMJD','TZRFRQ','TZRSITE','NITS']
-
-list_ordered_params_binary = ['BINARY', 'A1',   'E', 'OM',  'T0',   'EPS1', 'EPS2', 'TASC', 'OMDOT', 'PB', 'PBDOT', 'XPBDOT', 'FB0', 'FB1',   'FB2',   'FB3',   'FB4',   'FB5',   'FB6',   'FB7',   'FB8',   'FB9','FB10','FB11','FB12','FB13','GAMMA', 'SINI', 'MTOT', 'M2', 'XDOT', 'EDOT', 'DTHETA', 'DR']
+list_ordered_params_binary = ['BINARY', 'A1',   'E', 'OM',  'T0',   'EPS1', 'EPS2', 'TASC', 'OMDOT', 'PB', 'PBDOT', 'XPBDOT', 'FB0', 'FB1',   'FB2',   'FB3',   'FB4',   'FB5',   'FB6',   'FB7',   'FB8',   'FB9', 'FB10', 'FB11', 'FB12', 'FB13', 'GAMMA', 'SINI', 'MTOT', 'M2', 'XDOT', 'EDOT', 'DTHETA', 'DR']
 
 
-def write_parfile_formatted( dict_parfile, list_parameters_to_fit, outname):
+def write_parfile_formatted(dict_parfile, list_parameters_to_fit, outname):
         f_parfile = open(outname, "w")
 
         for k in list_ordered_params_general + list_ordered_params_binary:
-                if k in dict_parfile.keys():
+                if k in list(dict_parfile.keys()):
                         string = dict_param_formatters[k].format(k) + str(dict_parfile[k])
-
+                        
                         if k in list_parameters_to_fit:
                                 string = string + " 1\n"
                         else:
@@ -57,49 +83,98 @@ def write_parfile_formatted( dict_parfile, list_parameters_to_fit, outname):
         f_parfile.close()
 
 
-
-def import_bestprof( infile ):
-        file_bestprof = open( infile, "r" )
+def import_bestprof(infile):
+        file_bestprof = open(infile, "r")
 
         dict_bestprof = {}
 
-	for line in file_bestprof:
+        for line in file_bestprof:
                 if line.startswith("# "):
-                        split_line = [ x.strip() for x in line[2:].split("=") ]
+                        split_line = [x.strip() for x in line[2:].split("=")]
 
                         if (split_line[0] == "P_topo (ms)") or (split_line[0] == "P_bary (ms)") or (split_line[0] == "P'_topo (s/s)") or (split_line[0] == "P'_bary (s/s)") or (split_line[0] == "P'_bary (s/s)") or (split_line[0] == "P''_bary (s/s^2)"):
                                 try:
                                         split_line[1] = np.float64(split_line[1].split("+/-")[0].strip())
                                 except:
                                         pass
-                            
+
                         try:
-                                dict_bestprof[ split_line[0] ] = split_line[1]
-			except:
+                                dict_bestprof[split_line[0] ] = split_line[1]
+                        except:
                                 pass
-                        
+
         return dict_bestprof
 
 
 def convert_F0_into_P0(F0):
         return 1./F0
 
+
 def convert_F1_into_Pdot(F0, F1):
         Pdot =   -F1 / (np.power(F0, 2))
         return Pdot
 
+
 def convert_F2_into_Pddot(F0, F1, F2):
-	Pddot = 2*np.power(F1, 2)/np.power(F0, 3.)  - F2/np.power(F0, 2)
+        Pddot = 2*np.power(F1, 2)/np.power(F0, 3.)  - F2/np.power(F0, 2)
         return Pddot
 
 
 def convert_Pdot_into_F1(P, Pdot):
-	F1 =  -Pdot / np.power(P, 2)
-	return F1
+        F1 =  -Pdot / np.power(P, 2)
+        return F1
+
 
 def convert_Pddot_into_F2(P, Pdot, Pddot):
         F2 = 2*np.power(Pdot, 2)/np.power(P, 3.)  - Pddot/np.power(P, 2)
         return F2
+
+
+class Inffile(object):
+       def __init__(self, inffilename):
+              inffile = open(inffilename, "r")
+              for line in inffile:
+                     if "Data file name without suffix" in line:
+                            self.datafilebasenam = line.split("=")[-1].strip()
+                     elif "Telescope used" in line:
+                            self.telescope = line.split("=")[-1].strip()
+                     elif "Instrument used" in line:
+                            self.instrument = line.split("=")[-1].strip()
+                     elif "Object being observed" in line:
+                            self.source_name = line.split("=")[-1].strip()
+                     elif "J2000 Right Ascension" in line:
+                            self.RAJ_str = line.split("=")[-1].strip()
+                     elif "J2000 Declination" in line:
+                            self.DECJ_str = line.split("=")[-1].strip()
+                     elif "Data observed by" in line:
+                            self.observer = line.split("=")[-1].strip()
+                     elif "Epoch of observation" in line:
+                            self.start_MJD = np.float128(line.split("=")[-1].strip())
+                     elif "Barycentered?" in line:
+                            self.barycentered = int(line.split("=")[-1].strip())
+                     elif "Number of bins in the time series" in line:
+                            self.nsamples = int(line.split("=")[-1].strip())
+                     elif "Width of each time series bin" in line:
+                            self.tsamp_s = np.float128(line.split("=")[-1].strip())
+                     elif "Any breaks in the data?" in line:
+                            self.breaks_in_data = int(line.split("=")[-1].strip())
+                     elif "Type of observation" in line:
+                            self.obstype = line.split("=")[-1].strip()
+                     elif "Beam diameter" in line:
+                            self.beamdiameter = np.float128(line.split("=")[-1].strip())
+                     elif "Dispersion measure" in line:
+                            self.DM = np.float128(line.split("=")[-1].strip())
+                     elif "Central freq of low channel" in line:
+                            self.freq_central_MHz = np.float128(line.split("=")[-1].strip())
+                     elif "Total bandwidth" in line:
+                            self.bw = np.float128(line.split("=")[-1].strip())
+                     elif "Number of channels" in line:
+                            self.nchan = int(line.split("=")[-1].strip())
+                     elif "Channel bandwidth" in line:
+                            self.bw_chan = np.float128(line.split("=")[-1].strip())
+                     elif "Data analyzed by" in line:
+                            self.analyzer = line.split("=")[-1].strip()
+              inffile.close()
 
 
 class Observation(object):
@@ -108,114 +183,116 @@ class Observation(object):
                 self.file_nameonly = self.file_abspath.split("/")[-1]
                 self.file_basename, self.file_extension = os.path.splitext(self.file_nameonly)
 
-                if data_type=="psrfits":
+                if data_type =="psrfits":
                         if verbosity_level >= 2:
-                                print "Reading PSRFITS...."
+                                print("Reading PSRFITS....")
                         if psrfits.is_PSRFITS(file_name) == True:
                                 if verbosity_level >= 2:
-                                        print "File '%s' correctly recognized as PSRFITS" % (file_name)
+                                        print("File '%s' correctly recognized as PSRFITS" % (file_name))
                                 object_file = psrfits.PsrfitsFile(self.file_abspath)
-                                self.bw_MHz           = object_file.specinfo.BW
-                                self.N_samples        = object_file.specinfo.N
-                                self.T_obs_s          = object_file.specinfo.T
-                                self.backend          = object_file.specinfo.backend
-                                self.nbits            = object_file.specinfo.bits_per_sample
-                                self.date_obs         = object_file.specinfo.date_obs
-                                self.dec_deg          = object_file.specinfo.dec2000
-                                self.dec_str          = object_file.specinfo.dec_str
-                                self.chanbw_MHz       = object_file.specinfo.df
-                                self.t_samp_s         = object_file.specinfo.dt
+                                self.bw_MHz = object_file.specinfo.BW
+                                self.N_samples = object_file.specinfo.N
+                                self.T_obs_s = object_file.specinfo.T
+                                self.backend = object_file.specinfo.backend
+                                self.nbits = object_file.specinfo.bits_per_sample
+                                self.date_obs = object_file.specinfo.date_obs
+                                self.dec_deg = object_file.specinfo.dec2000
+                                self.dec_str = object_file.specinfo.dec_str
+                                self.chanbw_MHz = object_file.specinfo.df
+                                self.t_samp_s = object_file.specinfo.dt
                                 self.freq_central_MHz = object_file.specinfo.fctr
-                                self.receiver         = object_file.specinfo.frontend
-                                self.freq_high_MHz    = object_file.specinfo.hi_freq
-                                self.freq_low_MHz     = object_file.specinfo.lo_freq
-                                self.MJD_int          = object_file.specinfo.mjd
-                                self.MJD_sec          = object_file.specinfo.secs
-                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.)
-                                self.nchan            = object_file.specinfo.num_channels
-                                self.observer         = object_file.specinfo.observer
-                                self.project          = object_file.specinfo.project_id
-                                self.ra_deg           = object_file.specinfo.ra2000
-                                self.ra_str           = object_file.specinfo.ra_str
-                                self.seconds_of_day   = object_file.specinfo.secs
-                                self.source_name      = object_file.specinfo.source
-                                self.telescope        = object_file.specinfo.telescope
-                                self.RAJ_str          = object_file.specinfo.ra_str
-                                self.DECJ_str         = object_file.specinfo.dec_str
+                                self.receiver = object_file.specinfo.frontend
+                                self.freq_high_MHz = object_file.specinfo.hi_freq
+                                self.freq_low_MHz = object_file.specinfo.lo_freq
+                                self.MJD_int = object_file.specinfo.mjd
+                                self.MJD_sec = object_file.specinfo.secs
+                                self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                                self.nchan = object_file.specinfo.num_channels
+                                self.observer = object_file.specinfo.observer
+                                self.project = object_file.specinfo.project_id
+                                self.ra_deg = object_file.specinfo.ra2000
+                                self.ra_str = object_file.specinfo.ra_str
+                                self.seconds_of_day = object_file.specinfo.secs
+                                self.source_name = object_file.specinfo.source
+                                self.telescope = object_file.specinfo.telescope
+                                self.RAJ_str = object_file.specinfo.ra_str
+                                self.DECJ_str = object_file.specinfo.dec_str
 
                         else:
-                                print "Reading PSRFITS (header only)...."
-                                self.bw_MHz           = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
-                                self.N_samples        = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
-                                self.T_obs_s          = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
-                                self.backend          = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
-                                self.nbits            = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
-                                self.chanbw_MHz       = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
-                                self.t_samp_s         = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
+                                print("Reading PSRFITS (header only)....")
+                                self.bw_MHz = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
+                                self.N_samples = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
+                                self.T_obs_s = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
+                                self.backend = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
+                                self.nbits = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
+                                self.chanbw_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
+                                self.t_samp_s = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
                                 self.freq_central_MHz = np.float(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
-                                self.receiver         = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
-                                self.freq_high_MHz    = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
-                                self.freq_low_MHz     = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
-                                self.nchan            = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
-                                self.MJD_int          = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
-                                self.MJD_sec_int      = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
-                                self.MJD_sec_frac     = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
-                                self.MJD_sec          = self.MJD_sec_int + self.MJD_sec_frac
-                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.)
-                                self.RAJ_str          = get_command_output("vap -n -c ra %s" % (file_name)).split()[-1]
-                                self.DECJ_str         = get_command_output("vap -n -c dec %s" % (file_name)).split()[-1]
+                                self.receiver = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
+                                self.freq_high_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
+                                self.freq_low_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
+                                self.nchan = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
+                                self.MJD_int = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
+                                self.MJD_sec_int = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
+                                self.MJD_sec_frac = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
+                                self.MJD_sec = self.MJD_sec_int + self.MJD_sec_frac
+                                self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                                self.RAJ_str = get_command_output("vap -n -c ra %s" % (file_name)).split()[-1]
+                                self.DECJ_str = get_command_output("vap -n -c dec %s" % (file_name)).split()[-1]
 
-                elif data_type=="filterbank":
+                elif data_type =="filterbank":
                         try:
                                 object_file = filterbank.FilterbankFile(self.file_abspath)
 
-                                self.N_samples        = object_file.nspec
-                                self.t_samp_s         = object_file.dt
-                                self.T_obs_s          = self.N_samples * self.t_samp_s
-                                self.nbits            = object_file.header['nbits']
-                                self.nchan            = object_file.nchan
-                                self.chanbw_MHz       = object_file.header['foff']
-                                self.bw_MHz           = self.nchan * self.chanbw_MHz
+                                self.N_samples = object_file.nspec
+                                self.t_samp_s = object_file.dt
+                                self.T_obs_s = self.N_samples * self.t_samp_s
+                                self.nbits = object_file.header['nbits']
+                                self.nchan = object_file.nchan
+                                self.chanbw_MHz = object_file.header['foff']
+                                self.bw_MHz = self.nchan * self.chanbw_MHz
                                 self.freq_central_MHz = object_file.header['fch1'] + object_file.header['foff']*0.5*object_file.nchan
-                                self.freq_high_MHz    = np.amax(object_file.freqs)
-                                self.freq_low_MHz     = np.amin(object_file.freqs)
-                                self.MJD_int          = int(object_file.header['tstart'])
-                                self.Tstart_MJD       = object_file.header['tstart']
+                                self.freq_high_MHz = np.amax(object_file.freqs)
+                                self.freq_low_MHz = np.amin(object_file.freqs)
+                                self.MJD_int = int(object_file.header['tstart'])
+                                self.Tstart_MJD = object_file.header['tstart']
 
                                 src_raj = "%s" % str(object_file.header['src_raj'])
-                                src_dej = "%+f"% object_file.header['src_dej']
-                                print "src_raj = ", src_raj
+                                src_dej = "%+f" % object_file.header['src_dej']
+                                print("src_raj = ", src_raj)
                                 if len(src_raj.split(".")[0]) < 6:
-                                        src_raj = "0"*(6-len(src_raj.split(".")[0])) + src_raj 
-                                print "src_dej = ", src_dej
-                                self.RAJ_str          = "%s:%s:%s" % (src_raj[:2], src_raj[2:4], src_raj[4:])
-                                self.DECJ_str         = "%s:%s:%s" % (src_dej[:3], src_dej[3:5], src_dej[5:])
-                                self.source_name      = object_file.header['source_name'].strip()
-                                
+                                        src_raj = "0"*(6-len(src_raj.split(".")[0])) + src_raj
+                                print("src_dej = ", src_dej)
+                                self.RAJ_str = "%s:%s:%s" % (src_raj[:2], src_raj[2:4], src_raj[4:])
+                                self.DECJ_str = "%s:%s:%s" % (src_dej[:3], src_dej[3:5], src_dej[5:])
+                                self.source_name = object_file.header['source_name'].strip()
                                 
                         except ValueError:
                                 if verbosity_level >= 1:
-                                        print "WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information..."
-                                        
-                                        self.N_samples        = np.abs(int(    get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
-                                        self.t_samp_s         = np.float(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) *1.0e-6
-                                        self.T_obs_s          = np.float(      get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
-                                        self.nbits            = int(           get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
-                                        self.nchan            = int(           get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
-                                        self.chanbw_MHz       = np.fabs(np.float(       get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
-                                        self.bw_MHz           = self.chanbw_MHz*self.nchan
-                                        self.backend          = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                        self.Tstart_MJD              = np.float(      get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
-                                        self.freq_high_MHz    = np.float(      get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
-                                        self.freq_central_MHz = self.freq_high_MHz -0.5*self.bw_MHz
-                                        self.freq_low_MHz     = self.freq_high_MHz - self.bw_MHz
-                                        
- 
+                                        print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information...")
+
+                                        self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
+                                        self.t_samp_s         = np.float(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
+                                        self.T_obs_s          = np.float(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
+                                        self.nbits            = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
+                                        self.nchan            = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
+                                        self.chanbw_MHz       = np.fabs(np.float(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
+                                        self.bw_MHz = self.chanbw_MHz*self.nchan
+                                        self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
+                                        self.Tstart_MJD              = np.float(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                        self.freq_high_MHz    = np.float(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
+                                        self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
+                                        self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
+                                        self.source_name      = get_command_output("header %s -source_name" % (self.file_abspath)).split()[-1]
+                                        self.RAJ_str          = ":".join(get_command_output_with_pipe("header %s" % (file_name), "grep RA").split(":")[1:]).strip()
+                                        self.DECJ_str         = ":".join(get_command_output_with_pipe("header %s" % (file_name), "grep DEC").split(":")[1:]).strip()
+
+
 outfilename = ""
 
-#SHELL ARGUMENTS
+# SHELL ARGUMENTS
 if (len(sys.argv) == 1):
-        print "USAGE: %s -bestprof \"*.bestprof\" -rawfile <rawfile>" % (os.path.basename(sys.argv[0]))
+        print("USAGE: %s -bestprof \"*.bestprof\" -rawfile <rawfile>" % (os.path.basename(sys.argv[0])))
         exit()
 else:
         for j in range(1, len(sys.argv)):
@@ -228,73 +305,80 @@ else:
 
                 elif (sys.argv[j] == "-rawfile"):
                         rawfilename = sys.argv[j+1]
-                        
 
-N_bestprof = len(list_bestprof) 
+
+N_bestprof = len(list_bestprof)
 if rawfilename.endswith(".fil"):
         rawfile = Observation(rawfilename, data_type="filterbank")
-elif rawfilename.endswith(".fits") or rawfilename.endswith(".sd"):
+elif rawfilename.endswith(".fits") or rawfilename.endswith(".sf"):
         rawfile = Observation(rawfilename, data_type="psrfits")
+elif rawfilename.endswith(".dat") or rawfilename.endswith(".inf"):
+        inffile_name = rawfilename.replace(".dat", ".inf") 
+        rawfile = Inffile(inffile_name)
+
+
         
 for k in range(N_bestprof):
-        
         bestprof_filename = list_bestprof[k]
         outfilename = bestprof_filename.replace(".bestprof", ".par")
-        
+
         dict_bestprof = import_bestprof(bestprof_filename)
-
-        bestprof_PEPOCH_bary           = np.float(dict_bestprof['Epoch_bary (MJD)'])
-        bestprof_P0_bary_s             = np.float(dict_bestprof['P_bary (ms)'])*1.0e-3
-        bestprof_P1_bary_ss            = np.float(dict_bestprof["P'_bary (s/s)"])
-        bestprof_P2_bary_ss2           = np.float(dict_bestprof["P''_bary (s/s^2)"])
-
-        bestprof_F0_bary_Hz            = 1./bestprof_P0_bary_s 
-        bestprof_F1_bary_Hz_s          = convert_Pdot_into_F1(bestprof_P0_bary_s, bestprof_P1_bary_ss)
-        bestprof_F2_bary_Hz_s2         = convert_Pddot_into_F2(bestprof_P0_bary_s, bestprof_P1_bary_ss, bestprof_P2_bary_ss2)
-
         
-        bestprof_telescope             = dict_bestprof['Telescope']
-        bestprof_telescope_T1_id       = convert_obs_name_to_T1_id(bestprof_telescope)
+        bestprof_PEPOCH_bary = np.float(dict_bestprof['Epoch_bary (MJD)'])
+        bestprof_P0_bary_s = np.float(dict_bestprof['P_bary (ms)'])*1.0e-3
+        bestprof_P1_bary_ss = np.float(dict_bestprof["P'_bary (s/s)"])
+        bestprof_P2_bary_ss2 = np.float(dict_bestprof["P''_bary (s/s^2)"])
+
+        bestprof_F0_bary_Hz            = 1./bestprof_P0_bary_s
+        bestprof_F1_bary_Hz_s = convert_Pdot_into_F1(bestprof_P0_bary_s, bestprof_P1_bary_ss)
+        bestprof_F2_bary_Hz_s2 = convert_Pddot_into_F2(bestprof_P0_bary_s, bestprof_P1_bary_ss, bestprof_P2_bary_ss2)
+
+        bestprof_telescope = dict_bestprof['Telescope']
+        bestprof_telescope_T1_id = convert_obs_name_to_T1_id(bestprof_telescope)
         bestprof_telescope_parfilecode = dict_obs_parfilecodes[bestprof_telescope_T1_id]
-        bestprof_DM                    = np.float(dict_bestprof['Best DM'])
-        
-        P_dot          = np.float(dict_bestprof["P'_bary (s/s)"])
-        nsamples       = int(dict_bestprof["Data Folded"])
-        T_sample       = np.float((dict_bestprof["T_sample"]))
+        try:
+                bestprof_DM = np.float(dict_bestprof['Best DM'])
+        except:
+                bestprof_DM = np.float(input("DM not found. Please input its value here (pc cm-3): "))
+
+        P_dot = np.float(dict_bestprof["P'_bary (s/s)"])
+        nsamples = int(dict_bestprof["Data Folded"])
+        T_sample = np.float((dict_bestprof["T_sample"]))
 
         chunk_length_s = nsamples*T_sample
-        
 
         dict_parfile = {}
 
-        dict_parfile['PSR']               = rawfile.source_name
-        dict_parfile['RAJ']               = rawfile.RAJ_str
-        dict_parfile['DECJ']              = rawfile.DECJ_str
-        dict_parfile['F0']                = bestprof_F0_bary_Hz   
-        dict_parfile['F1']                = bestprof_F1_bary_Hz_s 
-        dict_parfile['F2']                = bestprof_F2_bary_Hz_s2
-        dict_parfile['PEPOCH'] =            bestprof_PEPOCH_bary
-        dict_parfile['START'] =             bestprof_PEPOCH_bary
-        dict_parfile['FINISH'] =            bestprof_PEPOCH_bary
-        dict_parfile['DM'] =                bestprof_DM
-        dict_parfile['SOLARN0'] =               10.00
-        dict_parfile['EPHEM'] =                "DE421"
-        dict_parfile['CLK'] =                  "UTC(NIST)"                       
-        dict_parfile['UNITS'] =                "TDB"
-        dict_parfile['TIMEEPH'] =             "FB90"
-        dict_parfile['T2CMETHOD'] =            "TEMPO"
-        dict_parfile['CORRECT_TROPOSPHERE'] =  "N"
-        dict_parfile['PLANET_SHAPIRO'] =       "N"
-        dict_parfile['DILATEFREQ'] =           "N"
-        dict_parfile['NTOA'] =                     10
-        dict_parfile['TRES'] =                  5.0
-        dict_parfile['TZRMJD'] =  bestprof_PEPOCH_bary
-        dict_parfile['TZRFRQ']  = rawfile.freq_central_MHz
+        dict_parfile['PSR'] = rawfile.source_name
+        dict_parfile['RAJ'] = rawfile.RAJ_str
+        dict_parfile['DECJ'] = rawfile.DECJ_str
+        dict_parfile['F0']                = bestprof_F0_bary_Hz
+        dict_parfile['F1']                = bestprof_F1_bary_Hz_s
+        dict_parfile['F2'] = bestprof_F2_bary_Hz_s2
+        dict_parfile['PEPOCH'] = bestprof_PEPOCH_bary
+        dict_parfile['START'] = bestprof_PEPOCH_bary
+        dict_parfile['FINISH'] = bestprof_PEPOCH_bary
+        dict_parfile['DM'] = bestprof_DM
+        dict_parfile['SOLARN0'] = 10.00
+        dict_parfile['EPHEM'] = "DE421"
+        dict_parfile['CLK'] =                  "UTC(NIST)"
+        dict_parfile['UNITS'] = "TDB"
+        dict_parfile['TIMEEPH'] = "FB90"
+        dict_parfile['T2CMETHOD'] = "TEMPO"
+        dict_parfile['CORRECT_TROPOSPHERE'] = "N"
+        dict_parfile['PLANET_SHAPIRO'] = "N"
+        dict_parfile['DILATEFREQ'] = "N"
+        dict_parfile['NTOA'] = 10
+        dict_parfile['TRES'] = 5.0
+        dict_parfile['TZRMJD'] = bestprof_PEPOCH_bary
+        dict_parfile['TZRFRQ'] = rawfile.freq_central_MHz
         dict_parfile['TZRSITE'] = bestprof_telescope_parfilecode
-        dict_parfile['MODE'] =                      "1"
-        dict_parfile['NITS'] =                    1
-        
+        dict_parfile['MODE'] = "1"
+        dict_parfile['NITS'] = 1
 
-        print "Writing '%s'..." % (outfilename),; sys.stdout.flush() 
-        write_parfile_formatted( dict_parfile, [], outfilename)
-        print "done!"; sys.stdout.flush()
+
+        print("Writing '%s'..." % (outfilename), end=' ')
+        sys.stdout.flush() 
+        write_parfile_formatted(dict_parfile, [], outfilename)
+        print("done!")
+        sys.stdout.flush()
