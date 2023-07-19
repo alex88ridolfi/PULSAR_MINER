@@ -141,8 +141,8 @@ def check_if_cand_is_known(candidate, list_known_pulsars, numharm):
                         # print "----------------- HARMONICS ----"
                         for nh in range(1, numharm + 1):
                                 for n in range(1, 16+1):
-                                        P_known_ms_nh_min = P_ms_min * (np.float(n) / nh)
-                                        P_known_ms_nh_max = P_ms_max * (np.float(n) / nh)
+                                        P_known_ms_nh_min = P_ms_min * (np.float64(n) / nh)
+                                        P_known_ms_nh_max = P_ms_max * (np.float64(n) / nh)
 
                                         # print "nh = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f  (cand = %.10f)" % (nh, n, psrname, P_ms, P_known_ms_nh_min, P_known_ms_nh_max, P_cand_ms)
 
@@ -154,8 +154,8 @@ def check_if_cand_is_known(candidate, list_known_pulsars, numharm):
                         # print "----------------- SUBHARMONICS ----"
                         for ns in range(2, numharm + 1):
                                 for n in range(1, 16+1):
-                                        P_known_ms_ns_min = P_ms_min * (np.float(ns) / n)
-                                        P_known_ms_ns_max = P_ms_max * (np.float(ns) / n)
+                                        P_known_ms_ns_min = P_ms_min * (np.float64(ns) / n)
+                                        P_known_ms_ns_max = P_ms_max * (np.float64(ns) / n)
                                         # print "ns = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f (cand = %.10f)" % (n, ns, psrname, P_ms, P_known_ms_ns_min, P_known_ms_ns_max, P_cand_ms)
 
                                         if (P_cand_ms >= P_known_ms_ns_min) and (P_cand_ms <= P_known_ms_ns_max):
@@ -244,15 +244,15 @@ class Observation(object):
                                         print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information...")
 
                                 self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
-                                self.t_samp_s         = np.float(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
-                                self.T_obs_s          = np.float(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
+                                self.t_samp_s         = np.float64(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
+                                self.T_obs_s          = np.float64(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
                                 self.nbits            = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
                                 self.nchan            = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
-                                self.chanbw_MHz       = np.fabs(np.float(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
+                                self.chanbw_MHz       = np.fabs(np.float64(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
                                 self.bw_MHz = self.chanbw_MHz*self.nchan
                                 self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                self.Tstart_MJD              = np.float(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
-                                self.freq_high_MHz    = np.float(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
+                                self.Tstart_MJD              = np.float64(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                self.freq_high_MHz    = np.float64(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
                                 self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
                                 self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
 
@@ -282,7 +282,7 @@ class Observation(object):
                                 self.freq_low_MHz = object_file.specinfo.lo_freq
                                 self.MJD_int = object_file.specinfo.mjd
                                 self.MJD_sec = object_file.specinfo.secs
-                                self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                                self.Tstart_MJD = self.MJD_int + np.float64(self.MJD_sec/86400.)
                                 self.nchan = object_file.specinfo.num_channels
                                 self.observer = object_file.specinfo.observer
                                 self.project = object_file.specinfo.project_id
@@ -294,23 +294,23 @@ class Observation(object):
 
                         else:
                                 print("Reading PSRFITS (header only)....")
-                                self.bw_MHz = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
-                                self.N_samples = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
-                                self.T_obs_s = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
+                                self.bw_MHz = np.float64(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
+                                self.N_samples = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
+                                self.T_obs_s = np.float64(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
                                 self.backend = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
                                 self.nbits = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
-                                self.chanbw_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
-                                self.t_samp_s = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
-                                self.freq_central_MHz = np.float(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
+                                self.chanbw_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
+                                self.t_samp_s = np.float64(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
+                                self.freq_central_MHz = np.float64(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
                                 self.receiver = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
-                                self.freq_high_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
-                                self.freq_low_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
+                                self.freq_high_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
+                                self.freq_low_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
                                 self.nchan = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
                                 self.MJD_int = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
                                 self.MJD_sec_int = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
-                                self.MJD_sec_frac = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
+                                self.MJD_sec_frac = np.float64(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
                                 self.MJD_sec = self.MJD_sec_int + self.MJD_sec_frac
-                                self.Tstart_MJD       = self.MJD_int + np.float(self.MJD_sec/86400.)
+                                self.Tstart_MJD       = self.MJD_int + np.float64(self.MJD_sec/86400.)
 
 
 def execute_and_log(command, work_dir, log_abspath, dict_envs={}, flag_append=0, verbosity_level=0):
@@ -491,7 +491,7 @@ def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, 
                 if seg == "full":
                         cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -dm %.2f %s -mask %s -o raw_fold_%s_%s_%s_DM%.2f_%s    %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, cand.DM, flag_ignorechan, mask, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
                 else:
-                        segment_min = np.float(seg.replace("m", ""))
+                        segment_min = np.float64(seg.replace("m", ""))
                         i_chunk = int(ck.replace("ck", ""))
                         T_obs_min = T_obs_s / 60.
                         start_frac = (i_chunk * segment_min) / T_obs_min
@@ -552,8 +552,8 @@ def get_rfifind_result(file_mask, LOG_file, verbosity_level=0):
         N_chan = rfifind_mask.nchan
         N_int_masked = len(rfifind_mask.mask_zap_ints)
         N_chan_masked = len(rfifind_mask.mask_zap_chans)
-        fraction_int_masked = np.float(N_int_masked/N_int)
-        fraction_chan_masked = np.float(N_chan_masked/N_chan)
+        fraction_int_masked = np.float64(N_int_masked/N_int)
+        fraction_chan_masked = np.float64(N_chan_masked/N_chan)
 
         if verbosity_level >= 2:
                 print("get_rfifind_result:: file_mask: %s" % file_mask)
@@ -1223,7 +1223,7 @@ def prepdata(infile, out_dir, LOG_basename, DM, Nsamples=0, ignorechan_list="", 
         infile_basename = os.path.splitext(infile_nameonly)[0]
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
         # file_log = open(log_abspath, "w"); file_log.close()
-        outfile_basename = "%s_DM%05.2f" % (infile_basename, np.float(DM))
+        outfile_basename = "%s_DM%05.2f" % (infile_basename, np.float64(DM))
         datfile_abspath = os.path.join(out_dir, "%s.dat" % (outfile_basename))
         inffile_abspath = os.path.join(out_dir, "%s.inf" % (outfile_basename))
 
@@ -1237,7 +1237,7 @@ def prepdata(infile, out_dir, LOG_basename, DM, Nsamples=0, ignorechan_list="", 
                 exit()
 
         if Nsamples >= 0:
-                flag_numout = "-numout %d " % (make_even_number(int(Nsamples/np.float(downsample_factor))) )
+                flag_numout = "-numout %d " % (make_even_number(int(Nsamples/np.float64(downsample_factor))) )
         else:
                 flag_numout = ""
 
@@ -1329,12 +1329,12 @@ def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband):
         output_DDplan_list_lines = output_DDplan.split("\n")
         index = output_DDplan_list_lines.index("  Low DM    High DM     dDM  DownSamp   #DMs  WorkFract")   + 1
 
-        # print
-        # print "+++++++++++++++++++++++++++++++++"
-        # print "type(output_DDplan):", type(output_DDplan)
+        print
+        print("+++++++++++++++++++++++++++++++++")
+        print("type(output_DDplan):", type(output_DDplan))
         print(output_DDplan)
-        # print output_DDplan_list_lines
-        # print "+++++++++++++++++++++++++++++++++"
+        print(output_DDplan_list_lines)
+        print("+++++++++++++++++++++++++++++++++")
 
         flag_add_plans = 1
         while flag_add_plans == 1:
@@ -1342,9 +1342,9 @@ def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband):
                         return list_dict_schemes
                 else:
                         param = output_DDplan_list_lines[index].split()
-                        low_DM = np.float(param[0])
-                        high_DM = np.float(param[1])
-                        dDM = np.float(param[2])
+                        low_DM_by_DDplan   = np.float64(param[0])
+                        high_DM_by_DDplan = np.float64(param[1])
+                        dDM = np.float64(param[2])
                         downsamp = int(param[3])
                         num_DMs = int(param[4])
 
@@ -1352,21 +1352,27 @@ def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband):
                                 N_schemes = int(num_DMs / N_DMs_per_prepsubband) + 1
 
                                 for n in range(N_schemes-1):
-                                        lowDM   = low_DM + (n    * N_DMs_per_prepsubband * dDM)
-                                        highDM = lowDM + N_DMs_per_prepsubband * dDM
+                                        lowDM   = low_DM_by_DDplan + (n    * N_DMs_per_prepsubband * dDM)
+                                        highDM = lowDM + N_DMs_per_prepsubband * dDM                                
                                         dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': N_DMs_per_prepsubband}
+                                        if verbosity_level >= 2:
+                                                print("dict_scheme for loop = ",  dict_scheme)
                                         list_dict_schemes.append(dict_scheme)
 
-                                lowDM = low_DM + (N_schemes-1)   * N_DMs_per_prepsubband * dDM
-                                highDM = high_DM
-                                # print "high_DM = ", high_DM
-                                numDMs =  int((highDM - lowDM) / dDM)
-                                # print "numDMs =", numDMs
+                                lowDM =  round(low_DM_by_DDplan + (N_schemes-1)   * N_DMs_per_prepsubband * dDM,             3 ) #round to third decimal digit
+                                highDM = round(high_DM_by_DDplan, 3)
+                                numDMs = int(round((highDM - lowDM) / dDM, 3))
+				
                                 dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': numDMs}
                                 list_dict_schemes.append(dict_scheme)
+                                
+
 
                         else:
-                                dict_scheme = {'loDM': low_DM, 'highDM': high_DM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': num_DMs}
+                                dict_scheme = {'loDM': low_DM_by_DDplan, 'highDM': high_DM_by_DDplan, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': num_DMs}
+                                if verbosity_level >= 2:
+                                        print("num_DMs else =", num_DMs)
+                                        print("dict_scheme else =", dict_scheme)
                                 list_dict_schemes.append(dict_scheme)
 
                 index = index + 1
@@ -1398,17 +1404,17 @@ def get_DDplan_scheme(infile, out_dir, LOG_basename, loDM, highDM, DM_coherent_d
         infile_basename = os.path.splitext(infile_nameonly)[0]
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
 
-        if np.float(DM_coherent_dedispersion) == 0:
+        if np.float64(DM_coherent_dedispersion) == 0:
                 # Implement subbanding calculation!
                 # cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -f %s -b %s -n %s -s %s -t %s" % (infile_basename, loDM, highDM, freq_central_MHz, np.fabs(bw_MHz), nchan, nsubbands, t_samp_s)
                 cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -f %s -b %s -n %s -t %s" % (infile_basename, loDM, highDM, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s)
-        elif np.float(DM_coherent_dedispersion) > 0:
+        elif np.float64(DM_coherent_dedispersion) > 0:
                 # Implement subbanding calculation!
                 # cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -c %s -f %s -b %s -n %s -s %s -t %s" % (infile_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, np.fabs(bw_MHz), nchan, nsubbands, t_samp_s)
                 cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -c %s -f %s -b %s -n %s -t %s" % (infile_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s)
-                print("Coherent dedispersion enabled with DM = %.3f pc cm-3" % (np.float(DM_coherent_dedispersion)))
+                print("Coherent dedispersion enabled with DM = %.3f pc cm-3" % (np.float64(DM_coherent_dedispersion)))
 
-        elif np.float(DM_coherent_dedispersion) < 0:
+        elif np.float64(DM_coherent_dedispersion) < 0:
                 print("ERROR: The DM of coherent dedispersion < 0! Exiting...")
                 exit()
 
@@ -1439,7 +1445,7 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
         print()
         print("%10s %10s %10s %10s %10s " % ("Low DM", "High DM", "dDM",  "DownSamp",   "#DMs"))
         for i in range(N_schemes):
-                print("%10s %10s %10s %10s %10s " % (list_DD_schemes[i]['loDM'], np.float(list_DD_schemes[i]['loDM']) + int(list_DD_schemes[i]['num_DMs'])*np.float(list_DD_schemes[i]['dDM']), list_DD_schemes[i]['dDM'],  list_DD_schemes[i]['downsamp'],  list_DD_schemes[i]['num_DMs'] ))
+                print("%10s %10s %10s %10s %10s " % (list_DD_schemes[i]['loDM'], np.float64(list_DD_schemes[i]['loDM']) + int(list_DD_schemes[i]['num_DMs'])*np.float64(list_DD_schemes[i]['dDM']), list_DD_schemes[i]['dDM'],  list_DD_schemes[i]['downsamp'],  list_DD_schemes[i]['num_DMs'] ))
         print()
         sys.stdout.flush()
 
@@ -1455,11 +1461,11 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
 
         if verbosity_level >= 2:
                 print("dedisperse::  Checking prepsubband results...")
-        if check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=1) == True:
+        if check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level) == True:
                 print()
                 print("dedisperse:: WARNING: all the dedispersed time series for %s are already there! Skipping." % (infile_basename))
         else:
-                while check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=1) == False:
+                while check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level) == False:
                         if verbosity_level >= 2:
                                 print("check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=0) = ", check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=0))
                                 print("Checking results at: %s" % (out_dir))
@@ -1467,7 +1473,7 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                                 print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mtail -f %s\033[0m'" % (log_abspath))
                         for i in range(N_schemes):
                                 # if Nsamples >= 0:
-                                #       flag_numout = "-numout %d " % (make_even_number(int(Nsamples/np.float(list_DD_schemes[i]['downsamp']))))
+                                #       flag_numout = "-numout %d " % (make_even_number(int(Nsamples/np.float64(list_DD_schemes[i]['downsamp']))))
                                 # else:
                                 flag_numout = ""
 
@@ -1580,7 +1586,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
                                 print("search_string = ", search_string)
                                 print("list_datfiles_to_split = ", list_datfiles_to_split)
 
-                        segment_min = np.float(segment_label.replace("m", ""))
+                        segment_min = np.float64(segment_label.replace("m", ""))
                         i_chunk = int(chunk_label.replace("ck", ""))
                         split_into_chunks(list_datfiles_to_split, LOG_basename, out_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=flag_remove_datfiles_of_segments)
 
@@ -1643,9 +1649,9 @@ class SurveyConfiguration(object):
                         elif key == "JERKSEARCH_NUMHARM":                            self.jerksearch_numharm               = int(self.dict_survey_configuration[key])
                         elif key == "JERKSEARCH_NCPUS":
                                 self.jerksearch_ncpus                 = int(self.dict_survey_configuration[key])
-                        elif key == "PERIOD_TO_SEARCH_MIN":                          self.period_to_search_min             = np.float(self.dict_survey_configuration[key])
+                        elif key == "PERIOD_TO_SEARCH_MIN":                          self.period_to_search_min             = np.float64(self.dict_survey_configuration[key])
                         elif key == "PERIOD_TO_SEARCH_MAX":
-                                self.period_to_search_max             = np.float(self.dict_survey_configuration[key])
+                                self.period_to_search_max             = np.float64(self.dict_survey_configuration[key])
                         elif key == "RFIFIND_TIME":                                  self.rfifind_time                     = self.dict_survey_configuration[key]
                         elif key == "RFIFIND_FREQSIG":
                                 self.rfifind_freqsig                  = self.dict_survey_configuration[key]
@@ -1682,9 +1688,9 @@ class SurveyConfiguration(object):
                         elif key == "SIFTING_FLAG_REMOVE_HARMONICS" :                self.sifting_flag_remove_harmonics    = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_MINIMUM_NUM_DMS" :
                                 self.sifting_minimum_num_DMs          = int(self.dict_survey_configuration[key])
-                        elif key == "SIFTING_MINIMUM_DM" :                           self.sifting_minimum_DM               = np.float(self.dict_survey_configuration[key])
+                        elif key == "SIFTING_MINIMUM_DM" :                           self.sifting_minimum_DM               = np.float64(self.dict_survey_configuration[key])
                         elif key == "SIFTING_SIGMA_THRESHOLD" :
-                                self.sifting_sigma_threshold          = np.float(self.dict_survey_configuration[key])
+                                self.sifting_sigma_threshold          = np.float64(self.dict_survey_configuration[key])
                         elif key == "PREPFOLD_FLAGS" :                               self.prepfold_flags                   = self.dict_survey_configuration[key]
                         elif key == "NUM_SIMULTANEOUS_DMS_PREPSUBBAND" :
                                 self.num_simultaneous_dms_prepsubband = int(self.dict_survey_configuration[key])
@@ -2079,8 +2085,8 @@ if os.path.exists(dir_known_pulsars):
                         print()
 
 for seg in config.list_segments_nofull:
-        if (np.float(seg)*60) > config.list_Observations[0].T_obs_s:
-                print("Segment %d minutes > length of obs (%d minutes)" % (np.float(seg), config.list_Observations[0].T_obs_s/60.))
+        if (np.float64(seg)*60) > config.list_Observations[0].T_obs_s:
+                print("Segment %d minutes > length of obs (%d minutes)" % (np.float64(seg), config.list_Observations[0].T_obs_s/60.))
                 config.list_segments_nofull.remove(seg)
                 config.list_segments.remove(seg)
 
@@ -2127,8 +2133,8 @@ for i in range(len(config.list_Observations)):
                         segment_length_min    = config.list_Observations[i].T_obs_s / 60.
                         segment_label = s
                 else:
-                        segment_length_min  = np.float(s)
-                        segment_length_s = np.float(s) * 60
+                        segment_length_min  = np.float64(s)
+                        segment_length_s = np.float64(s) * 60
                         segment_label = "%dm" % (segment_length_min)
                 config.dict_search_structure[config.list_Observations[i].file_basename][segment_label] = {}
                 N_chunks = int(config.list_Observations[i].T_obs_s / segment_length_s)
@@ -2194,7 +2200,7 @@ for i in range(len(config.list_Observations)):
                                    verbosity_level
                                    )
                 mask = rfifind.rfifind(config.list_Observations[i].mask)
-                fraction_masked_channels = np.float(len(mask.mask_zap_chans))/mask.nchan
+                fraction_masked_channels = np.float64(len(mask.mask_zap_chans))/mask.nchan
                 if verbosity_level >= 1:
                         print()
                         print("RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.))
@@ -2233,7 +2239,7 @@ for i in range(len(config.list_Observations)):
                 if verbosity_level >= 1:
                         print()
                         print()
-                        print("WEIGHTS file '%s' found. Using it to ignore %d channels out of %d (%.2f%%)" % (os.path.basename(weights_file), config.nchan_ignored, config.list_Observations[i].nchan, 100*config.nchan_ignored/np.float(config.list_Observations[i].nchan)))
+                        print("WEIGHTS file '%s' found. Using it to ignore %d channels out of %d (%.2f%%)" % (os.path.basename(weights_file), config.nchan_ignored, config.list_Observations[i].nchan, 100*config.nchan_ignored/np.float64(config.list_Observations[i].nchan)))
                         print("IGNORED CHANNELS: %s" % (config.ignorechan_list))
 
 
@@ -2418,6 +2424,7 @@ if config.flag_step_dedisperse == 1:
         # 2)      LOOP OVER THE SEGMENT
         # 3)            LOOP OVER THE CHUNK
 
+        
 
         # 1) LOOP OVER EACH OBSERVATION
         for i in range(len(config.list_Observations)):
@@ -2485,7 +2492,7 @@ if config.flag_step_dedisperse == 1:
 
                                 dict_flag_steps = {'flag_step_dedisperse': config.flag_step_dedisperse, 'flag_step_realfft': config.flag_step_realfft, 'flag_step_periodicity_search': config.flag_step_periodicity_search}
 
-
+                     
                                 dedisperse_rednoise_and_periodicity_search_FFT(config.list_Observations[i].file_abspath,
                                                                                 work_dir_chunk,
                                                                                 config.root_workdir,
