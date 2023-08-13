@@ -946,11 +946,12 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, segment_label, chunk
                                                         print("accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env))
                                                 flag_cuda = ""
                                         else:
-                                                dict_env = copy.deepcopy(dict_env_zmax_any)
                                                 if flag_use_cuda == 1:
+                                                        dict_env = copy.deepcopy(dict_env_zmax_any)
                                                         gpu_id = random.choice(list_cuda_ids)
                                                         flag_cuda = " -cuda %d " % (gpu_id)
                                                 else:
+                                                        dict_env = copy.deepcopy(dict_env_zmax_0)
                                                         flag_cuda = ""
 
                                                 if verbosity_level >= 2:
