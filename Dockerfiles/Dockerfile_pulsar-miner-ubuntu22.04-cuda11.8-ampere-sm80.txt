@@ -1,0 +1,144 @@
+# Build with:
+# docker build -t "alex88ridolfi/pulsar-miner-2.0-gpu:ampere-sm80" - < Dockerfile_pulsar-miner-ubuntu22.04-cuda11.8-ampere-sm80.txt
+
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
+
+
+MAINTAINER Alessandro Ridolfi "alex88 . ridolfi AT gmail DOT com"
+
+# Suppress debconf warnings
+ENV DEBIAN_FRONTEND noninteractive
+ENV PSRHOME /software
+
+RUN apt-get update &&\
+    apt-get install -y --no-install-recommends \
+    git \   
+    ca-certificates
+
+RUN apt-get install -y python3-pip nano emacs less latex2html rsync
+
+# Make Python 3.10 the default version
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python3.10 1
+
+#######################
+# CUDA-SAMPLES
+#######################
+
+WORKDIR $PSRHOME
+RUN git clone https://github.com/NVIDIA/cuda-samples.git
+WORKDIR $PSRHOME/cuda-samples
+ENV CUDA=/usr/local/cuda
+ENV CUDA_PATH=${CUDA}
+
+ENV LD_LIBRARY_PATH=${CUDA}/lib64:${LD_LIBRARY_PATH}
+
+ENV CUDA_SAMPLES_DIR=${PSRHOME}/cuda-samples
+RUN git checkout 81992093d2b8c33cab22dbf6852c070c330f1715
+RUN make -j 8 SMS="80" 
+
+
+#######################
+# TEMPO
+#######################
+RUN apt-get install -y  autoconf gsl-bin libgsl-dev tcsh gfortran libtool
+
+WORKDIR $PSRHOME
+RUN git clone https://git.code.sf.net/p/tempo/tempo
+
+ENV TEMPO=$PSRHOME"/tempo" \
+    PATH=$PATH:$PSRHOME"/tempo/bin"
+
+WORKDIR $PSRHOME/tempo
+RUN ./prepare
+
+RUN ./configure --prefix=$PSRHOME/tempo && \
+    make && \
+    make install
+
+RUN python3 -m pip install numpy
+
+
+
+#######################
+# PRESTO2_ON_GPU
+#######################
+WORKDIR $PSRHOME
+RUN apt-get install -y libfftw3-bin libfftw3-dev libglib2.0-dev libcfitsio-bin libcfitsio-dev pgplot5 libx11-dev libpng-dev
+
+RUN git clone https://github.com/alex88ridolfi/presto2_on_gpu.git
+
+ENV PGPLOT_DIR="/usr/lib/pgplot5" \
+    PGPLOT_FONT="/usr/lib/pgplot5/grfont.dat" \
+    PGPLOT_INCLUDES="/usr/include" \
+    PGPLOT_BACKGROUND="white" \
+    PGPLOT_FOREGROUND="black" \
+    PGPLOT_DEV="/xs"
+
+ENV PRESTO="/software/presto2_on_gpu"
+ENV PRESTO2_ON_GPU="/software/presto2_on_gpu"
+ENV PATH="${PRESTO}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${PRESTO}/lib:${LD_LIBRARY_PATH}"
+
+WORKDIR ${PRESTO}/src
+
+RUN sed -i 's\CUDA_SAMPLES_PATH  ?= \CUDA_SAMPLES_PATH  ?= /software/cuda-samples\g' Makefile
+RUN sed -i 's\#       GENCODE_FLAGS    := ${GENCODE_FLAGS} -gencode arch=compute_80\        GENCODE_FLAGS    := ${GENCODE_FLAGS} -gencode arch=compute_80\g' Makefile
+
+
+RUN make makewisdom && \
+    make prep && \
+    make 
+
+ENV PATH=${PATH}
+
+#######################
+# PULSAR_MINER
+#######################
+
+WORKDIR ${PSRHOME}
+
+RUN git clone https://github.com/alex88ridolfi/PULSAR_MINER.git
+ENV PATH="${PSRHOME}/PULSAR_MINER:${PATH}"
+
+
+#######################
+# PRESTO
+#######################
+WORKDIR $PSRHOME
+
+
+RUN git clone https://github.com/alex88ridolfi/presto.git
+
+ENV PRESTO="/software/presto"
+ENV PATH="${PRESTO}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${PRESTO}/lib:${LD_LIBRARY_PATH}"
+
+WORKDIR ${PRESTO}/src
+
+RUN make makewisdom && \
+    make prep && \
+    make
+
+
+WORKDIR $PRESTO
+
+RUN python3 -m pip install .
+
+
+RUN echo 'export PS1="\[\e[4;30m\]\u@\h\[\e[0m\]:\[\e[1;10m\]\w\[\e[0m\]\$ (docker)> "' >> ~/.bashrc
+RUN echo 'alias ls="ls --color=auto"'       >> ~/.bashrc
+RUN echo 'alias ll="ls -l"'                 >> ~/.bashrc
+RUN echo 'alias LL="ls -lL"'                >> ~/.bashrc
+RUN echo 'alias lt="ls -lrt --color"'       >> ~/.bashrc
+RUN echo 'alias lh="ls -lh --color"'        >> ~/.bashrc
+RUN echo 'alias rm="rm -i"'                 >> ~/.bashrc
+RUN echo 'alias cp="cp -i"'                 >> ~/.bashrc
+RUN echo 'alias mv="mv -i"'                 >> ~/.bashrc
+RUN echo 'alias emacs="emacs -nw"'          >> ~/.bashrc
+
+
+
+RUN ldconfig /usr/local/lib
+
+WORKDIR ${PSRHOME}
