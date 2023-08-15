@@ -1,5 +1,5 @@
 # Build with:
-# docker build -t "pulsar-miner-gpu-turing" - < Dockerfile_pulsar-miner-ubuntu22.04-cuda11.8-turing.txt
+# docker build -t "alex88ridolfi/pulsar-miner-2.0-gpu:turing-sm75" - < Dockerfile_pulsar-miner-ubuntu22.04-cuda11.8-turing-sm75.txt
 
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
@@ -17,7 +17,7 @@ RUN apt-get update &&\
 
 RUN apt-get install -y python3-pip nano emacs less latex2html rsync
 
-# Make Python 3.11 the default version
+# Make Python 3.10 the default version
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python3.10 1
 
