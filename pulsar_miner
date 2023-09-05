@@ -36,6 +36,79 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version = "2.0-beta (02Jun2021)"
 
+class colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    ERROR = '\033[91m'
+    BOLD = '\033[1m'
+    ENDCOLOR = '\033[0m'
+
+
+def check_if_enough_disk_space(root_workdir, num_DMs, T_obs_s, t_samp_s, list_segments_nofull, flag_remove_fftfiles, flag_remove_datfiles_of_segments):
+        disk_space            = shutil.disk_usage(root_workdir)
+        disk_space_free_bytes = disk_space.free
+
+        N_samples_per_datfile_full   = int(T_obs_s / t_samp_s)
+        datfile_full_size_bytes      = N_samples_per_datfile_full * 4
+
+        if flag_remove_fftfiles == 0:
+                datfile_full_size_bytes = datfile_full_size_bytes*2
+        
+        full_length_search_size_bytes = num_DMs * datfile_full_size_bytes
+
+
+        print()
+        print("******************************************")
+        print("       Estimated disk space usage:")
+        print("******************************************")
+        if flag_remove_fftfiles == 0:
+                print("Removing .fft files? NO  --> each DM trial will occupy double the space")
+        else:
+                print("Removing .fft files? YES")
+
+        if flag_remove_datfiles_of_segments == 0:
+                print("Removing .dat files of segments? NO  --> total used space will be very high")
+        else:
+                print("Removing .dat files of segments? YES  --> disk space usage of the segmented search will be negligible")
+                
+        print()
+        print("Full-length      search: ~%4d GB        (%d DM trials * %5d MB per trial)" % (full_length_search_size_bytes/1.0e9, num_DMs, datfile_full_size_bytes/1.0e6) )
+
+
+        
+        total_search_size_bytes = full_length_search_size_bytes
+        
+        
+        for seg in list_segments_nofull:
+                seg_length_s = np.float(seg)*60
+                N_chunks = int(T_obs_s / seg_length_s)
+                if flag_remove_datfiles_of_segments == 0:
+                        N_samples_per_datfile_seg   = int(seg_length_s / t_samp_s)
+                        datfile_seg_size_bytes      = N_samples_per_datfile_seg * 4
+                else:
+                        datfile_seg_size_bytes = 0
+                if flag_remove_fftfiles == 0:
+                        datfile_seg_size_bytes = datfile_seg_size_bytes*2
+                
+                seg_search_size_bytes  = datfile_seg_size_bytes * num_DMs * N_chunks
+                total_search_size_bytes      = total_search_size_bytes + seg_search_size_bytes
+                print("Segment   %5sm search: ~%4d GB        (%d DM trials * %5d MB per trial * %2d chunks)" % (seg, seg_search_size_bytes/1.0e9, num_DMs, datfile_seg_size_bytes/1.0e6, N_chunks) )
+
+        print()
+        
+        print("EXPECTED DISK SPACE USAGE: ~%5d GB" % (1.1*total_search_size_bytes/1.0e9))
+        print("     AVAILABLE DISK SPACE: ~%5d GB" % (disk_space_free_bytes/1.0e9), end="")
+        if  disk_space_free_bytes > 1.1*total_search_size_bytes:
+                print("   --> All good! That's enough.")
+                return True
+        else:
+                print("   --> OUCH! That's NOT enough!")
+                return False
+
+
 
 class Pulsar(object):
         def __init__(self, parfilename):
@@ -171,7 +244,7 @@ class Inffile(object):
                 inffile = open(inffilename, "r")
                 for line in inffile:
                         if "Data file name without suffix" in line:
-                                self.datafilebasenam = line.split("=")[-1].strip()
+                                self.datafilebasename = line.split("=")[-1].strip()
                         elif "Telescope used" in line:
                                 self.telescope = line.split("=")[-1].strip()
                         elif "Instrument used" in line:
@@ -218,6 +291,7 @@ class Observation(object):
                 self.file_abspath = os.path.abspath(file_name)
                 self.file_nameonly = self.file_abspath.split("/")[-1]
                 self.file_basename, self.file_extension = os.path.splitext(self.file_nameonly)
+                self.file_buffer_copy = ""
 
                 if data_type =="filterbank":
 
@@ -658,7 +732,6 @@ def check_jerksearch_result(fft_infile, zmax, wmax, verbosity_level=0):
                 print("check_jerksearch_result:: ACCEL_filename = ", ACCEL_filename)
                 print("check_jerksearch_result:: ACCEL_cand_filename", ACCEL_cand_filename)
                 print("check_jerksearch_result:: ACCEL_txtcand_filename = ", ACCEL_txtcand_filename)
-                print("check_jerksearch_result:: sono qui 2!")
 
         ACCEL_filename =  fft_infile.replace(".fft", "_ACCEL_%d_JERK_%d"          % (zmax, wmax))
         ACCEL_cand_filename =  fft_infile.replace(".fft", "_ACCEL_%d_JERK_%d.cand"     % (zmax, wmax))
@@ -784,9 +857,9 @@ def split_into_chunks(list_datfiles_to_split, LOG_basename,  work_dir, segment_m
                 numout = make_even_number(int(segment_length_s / t_samp_s))
 
                 string_min = "%dm" % int(segment_min)
-                string_chunck = "ck%02d" % i_chunk
+                string_chunk = "ck%02d" % i_chunk
                 path_old = os.path.splitext(datfile_name)[0]
-                path_new = path_old.replace("full", string_min).replace("ck00", string_chunck)
+                path_new = path_old.replace("full", string_min).replace("ck00", string_chunk)
 
                 new_outfile_name = "%s" % (os.path.basename(path_new))
 
@@ -1609,7 +1682,7 @@ class SurveyConfiguration(object):
                 self.config_filename = config_filename
                 self.list_datafiles = []
 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'NUM_SIMULTANEOUS_DMS_PREPSUBBAND', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'FAST_BUFFER_DIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'NUM_SIMULTANEOUS_DMS_PREPSUBBAND', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
 
@@ -1623,7 +1696,10 @@ class SurveyConfiguration(object):
                 for key in list(self.dict_survey_configuration.keys()):
                         if   key == "SEARCH_LABEL":
                                 self.search_label                     = self.dict_survey_configuration[key]
-                        elif key == "ROOT_WORKDIR":                                  self.root_workdir                     = self.dict_survey_configuration[key]
+                        elif key == "ROOT_WORKDIR":                                 
+                                self.root_workdir                     = self.dict_survey_configuration[key]
+                        elif key == "FAST_BUFFER_DIR":
+                                self.fast_buffer_dir                  = self.dict_survey_configuration[key] 
                         elif key == "FILE_LIST_DATAFILES":
                                 self.list_datafiles_filename          = self.dict_survey_configuration[key]
                         elif key == "FILE_COMMON_BIRDIES":                           self.file_common_birdies              = self.dict_survey_configuration[key]
@@ -1795,9 +1871,10 @@ def init_default(observation_filename):
                                 print("ERROR: no PRESTO/PRESTO_ON_GPU environment variable seems to be defined!")
                                 exit()
 
-        dict_survey_configuration_default_values = {'SEARCH_LABEL':                        "%s               # Label of this search project" % os.path.basename(os.getcwd()),
+        dict_survey_configuration_default_values = {'SEARCH_LABEL':                        "%s                # Label of this search project" % os.path.basename(os.getcwd()),
                                                      'ROOT_WORKDIR':                        "%s               # Path of the root working directory" % os.getcwd(),
-                                                     'DATA_TYPE':                           "%-18s           # Options: filterbank, psrfits" % (default_file_format),
+                                                     'FAST_BUFFER_DIR':                     "\"\"             # Path of a SSD/Fast memory buffer (minimizes I/O bottlenecks, optional)",
+                                                     'DATA_TYPE':                           "%-18s            # Options: filterbank, psrfits" % (default_file_format),
                                                      'PRESTO':                              "%s               # Path of the main PRESTO installation" % presto_path,
                                                      'PRESTO_GPU':                          "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,
                                                      'DM_MIN':                              "2.0              # Minimum DM to search",
@@ -1870,6 +1947,7 @@ def init_default(observation_filename):
         with open(default_cfg_filename, "w") as f:
                 f.write("%-35s %s\n" % ('SEARCH_LABEL', dict_survey_configuration_default_values['SEARCH_LABEL']))
                 f.write("%-35s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
+                f.write("%-35s %s\n" % ('FAST_BUFFER_DIR', dict_survey_configuration_default_values['FAST_BUFFER_DIR']))
                 f.write("%-35s %s\n" % ('DATA_TYPE', dict_survey_configuration_default_values['DATA_TYPE']))
                 f.write("\n")
                 f.write("# PRESTO installations and GPU acceleration\n")
@@ -2125,6 +2203,53 @@ for i in range(len(config.list_Observations)):
                 print("%s: \033[1m %s \033[0m  (%.2f s)" % ("Observation", config.list_Observations[i].file_nameonly, config.list_Observations[i].T_obs_s))
                 print()
 
+      
+
+
+
+
+
+
+        
+        if config.fast_buffer_dir != "":
+                if os.path.exists(config.fast_buffer_dir):
+                
+                        file_buffer_abspath = os.path.join(config.fast_buffer_dir,config.list_Observations[i].file_nameonly)
+                        if (not os.path.exists(file_buffer_abspath) or (os.path.getsize(file_buffer_abspath) != os.path.getsize(config.list_Observations[i].file_abspath))) :
+
+                                if (os.path.getsize(config.list_Observations[i].file_abspath) <  shutil.disk_usage(config.fast_buffer_dir).free):
+                                        print()
+                                        print("Copying '%s' to the fast buffer directory '%s' (this may take a while)..." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir), end=""); sys.stdout.flush()
+                                        file_buffer_abspath = shutil.copy(config.list_Observations[i].file_abspath, config.fast_buffer_dir)
+                                        print("done!")
+                                
+                                        config.list_Observations[i].file_abspath = file_buffer_abspath
+                                        config.list_Observations[i].file_buffer_copy = file_buffer_abspath
+
+                                        print("Now config.list_Observations[i].file_abspath = ", config.list_Observations[i].file_abspath)
+                                else:
+                                        print()
+                                        print("%sWARNING:%s Not enough space on fast buffer directory '%s'!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, config.fast_buffer_dir) )
+                                        print("    -->  Fast buffer will not be used. This may result in slower processing...")
+                                        print()
+                                        #time.sleep(10)
+
+                        else:
+                                print("Copy of '%s' already present in the fast buffer directory '%s'. Skipping..." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir))
+                                file_buffer_abspath = os.path.join(config.fast_buffer_dir, config.list_Observations[i].file_nameonly)
+                                config.list_Observations[i].file_abspath = file_buffer_abspath
+                                config.list_Observations[i].file_buffer_copy = file_buffer_abspath
+                                print()
+                                print("The observation file used is now '%s'. " % (config.list_Observations[i].file_abspath))
+
+                else:
+                        print("%sWARNING:%s Fast buffer directory '%s' does not seem to exist!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, config.fast_buffer_dir) )
+                        print("    -->  Fast buffer will not be used. This may result in slower processing...")
+                        print()
+                        config.fast_buffer_dir = ""
+                        #time.sleep(10)
+
+                
         config.dict_search_structure[config.list_Observations[i].file_basename] = {}
         for s in config.list_segments:
                 if verbosity_level >= 2:
@@ -2155,7 +2280,43 @@ if verbosity_level >= 2:
         print("config.dict_search_structure:")
         print(config.dict_search_structure)
 
+if not os.path.exists(LOG_dir):
+        os.mkdir(LOG_dir)
+        
+list_DDplan_scheme = get_DDplan_scheme(config.list_Observations[i].file_abspath,
+                                                LOG_dir,
+                                                "LOG_diskspace",
+                                                config.dm_min,
+                                                config.dm_max,
+                                                config.dm_coherent_dedispersion,
+                                                config.num_simultaneous_dms_prepsubband,
+                                                config.list_Observations[i].freq_central_MHz,
+                                                config.list_Observations[i].bw_MHz,
+                                                config.list_Observations[i].nchan,
+                                                config.nsubbands,
+                                                config.list_Observations[i].t_samp_s)
 
+
+
+
+############################################################################################
+#    CHECK DISK SPACE
+############################################################################################
+
+num_DMs = 0 
+for j in range(len(list_DDplan_scheme)):
+        num_DMs = num_DMs + list_DDplan_scheme[j]['num_DMs']
+        
+flag_enough_disk_space = False
+flag_enough_disk_space = check_if_enough_disk_space(config.root_workdir, num_DMs, config.list_Observations[i].T_obs_s, config.list_Observations[i].t_samp_s, config.list_segments_nofull, config.flag_remove_fftfiles, config.flag_remove_datfiles_of_segments)
+
+if flag_enough_disk_space == False:
+        print()
+        print("%sERROR:%s Not enough space on disk! Please free up space or change the working directory." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR))
+        print("> TIP: To minimize disk usage, make sure to leave FLAG_REMOVE_FFTFILES and FLAG_REMOVE_DATFILES_OF_SEGMENTS to their default value of 1 in the config file.")
+        exit()
+
+###########################################################################################
 if verbosity_level >= 1:
         print()
         print("##################################################################################################")
@@ -2168,7 +2329,6 @@ rfifind_masks_dir = os.path.join(config.root_workdir, "01_RFIFIND")
 
 if not os.path.exists(rfifind_masks_dir):
         os.mkdir(rfifind_masks_dir)
-if not os.path.exists(LOG_dir):                   os.mkdir(LOG_dir)
 
 
 for i in range(len(config.list_Observations)):
@@ -2425,7 +2585,6 @@ if config.flag_step_dedisperse == 1:
         # 2)      LOOP OVER THE SEGMENT
         # 3)            LOOP OVER THE CHUNK
 
-        
 
         # 1) LOOP OVER EACH OBSERVATION
         for i in range(len(config.list_Observations)):
@@ -2493,7 +2652,7 @@ if config.flag_step_dedisperse == 1:
 
                                 dict_flag_steps = {'flag_step_dedisperse': config.flag_step_dedisperse, 'flag_step_realfft': config.flag_step_realfft, 'flag_step_periodicity_search': config.flag_step_periodicity_search}
 
-                     
+
                                 dedisperse_rednoise_and_periodicity_search_FFT(config.list_Observations[i].file_abspath,
                                                                                 work_dir_chunk,
                                                                                 config.root_workdir,
@@ -2502,33 +2661,33 @@ if config.flag_step_dedisperse == 1:
                                                                                 seg,
                                                                                 ck,
                                                                                 [i_seg, N_seg, i_ck, N_ck],
-                                    zapfile,
-                                    make_even_number(config.list_Observations[i].N_samples/1.0),
-                                    config.ignorechan_list,
-                                    config.list_Observations[i].mask,
-                                    list_DDplan_scheme,
-                                    config.list_Observations[i].nchan,
-                                    config.nsubbands,
-                                    config.prepsubband_flags,
-                                    config.presto_env,
-                                    config.flag_use_cuda,
-                                    config.list_cuda_ids,
-                                    config.accelsearch_numharm,
-                                    config.accelsearch_list_zmax,
-                                    config.jerksearch_zmax,
-                                    config.jerksearch_wmax,
-                                    config.jerksearch_numharm,
-                                    config.jerksearch_ncpus,
-                                                                config.period_to_search_min,
-                                                                config.period_to_search_max,
-                                                                config.accelsearch_flags,
-                                    config.flag_remove_fftfiles,
-                                    config.flag_remove_datfiles_of_segments,
-                                    config.presto_env,
-                                    config.presto_gpu_env,
-                                    verbosity_level,
-                                    dict_flag_steps)
-
+                                                                               zapfile,
+                                                                               make_even_number(config.list_Observations[i].N_samples/1.0),
+                                                                               config.ignorechan_list,
+                                                                               config.list_Observations[i].mask,
+                                                                               list_DDplan_scheme,
+                                                                               config.list_Observations[i].nchan,
+                                                                               config.nsubbands,
+                                                                               config.prepsubband_flags,
+                                                                               config.presto_env,
+                                                                               config.flag_use_cuda,
+                                                                               config.list_cuda_ids,
+                                                                               config.accelsearch_numharm,
+                                                                               config.accelsearch_list_zmax,
+                                                                               config.jerksearch_zmax,
+                                                                               config.jerksearch_wmax,
+                                                                               config.jerksearch_numharm,
+                                                                               config.jerksearch_ncpus,
+                                                                               config.period_to_search_min,
+                                                                               config.period_to_search_max,
+                                                                               config.accelsearch_flags,
+                                                                               config.flag_remove_fftfiles,
+                                                                               config.flag_remove_datfiles_of_segments,
+                                                                               config.presto_env,
+                                                                               config.presto_gpu_env,
+                                                                               verbosity_level,
+                                                                               dict_flag_steps)
+                                
 
 if config.flag_step_sifting == 1:
         print()
@@ -2723,23 +2882,24 @@ if config.flag_step_folding == 1:
                                                 if os.path.exists(file_to_fold):
 
                                                         fold_candidate(work_dir_candidate_folding,
-                                                                                     LOG_basename,
-                                                                        config.list_Observations[i].file_abspath,
-                                                                        dir_dedispersion,
-                                                                        obs,
-                                                                        seg,
-                                                                        ck,
-                                                                        config.list_Observations[i].T_obs_s,
-                                                                        candidate,
-                                                                        config.ignorechan_list,
-                                                                        config.list_Observations[i].mask,
-                                                                        config.prepfold_flags,
-                                                                        config.presto_env,
-                                                                        verbosity_level,
-                                                                        1,
-                                                                        "timeseries",
-                                                                                     config.num_simultaneous_folds
-                                                                        )
+                                                                       LOG_basename,
+                                                                       config.list_Observations[i].file_abspath,
+                                                                       dir_dedispersion,
+                                                                       obs,
+                                                                       seg,
+                                                                       ck,
+                                                                       config.list_Observations[i].T_obs_s,
+                                                                       candidate,
+                                                                       config.ignorechan_list,
+                                                                       config.list_Observations[i].mask,
+                                                                       config.prepfold_flags,
+                                                                       config.presto_env,
+                                                                       verbosity_level,
+                                                                       1,
+                                                                       "timeseries",
+                                                                       config.num_simultaneous_folds
+                                                        )
+
                                                         tend_folding_cand_ts = time.time()
                                                         time_taken_folding_cand_ts_s = tend_folding_cand_ts - tstart_folding_cand_ts
                                                         print("done in %.2f s!" % (time_taken_folding_cand_ts_s))
@@ -2792,3 +2952,10 @@ if config.flag_step_folding == 1:
                 print("5) CANDIDATE FOLDING - Now running:")
                 print("%s" % cmd_pm_run_multithread)
                 os.system(cmd_pm_run_multithread)
+
+                if config.list_Observations[i].file_buffer_copy != "":
+                        print()
+                        print("Remember to delete the copy of '%s' from the buffer directory" % (config.list_Observations[i].file_nameonly))
+                        #print("Removing copy of '%s' from the buffer..." % config.list_Observations[i].file_nameonly); sys.stdout.flush()
+                        #os.remove(config.list_Observations[i].file_buffer_copy)
+                        #print("done!")
