@@ -212,7 +212,7 @@ for i in range(N_beams):
 
        if rawfilename.endswith(".fil"):
               rawfile = Observation(rawfilename, data_type="filterbank")
-       elif rawfilename.endswith(".fits") or rawfilename.endswith(".sd"):
+       elif rawfilename.endswith(".fits") or rawfilename.endswith(".sf"):
               rawfile = Observation(rawfilename, data_type="psrfits")
               
        RA1 = rawfile.RAJ_str
