@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # ALESSANDRO RIDOLFI ########################
 
-## pulsar_miner_02Jun2021_v2: fix bug which causes pipeline crash in case of no birdies detected  
-
-
 import sys
 import os
 import os.path
@@ -34,7 +31,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (02Jun2021)"
+string_version = "2.0-beta (05Sep2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -1682,7 +1679,7 @@ class SurveyConfiguration(object):
                 self.config_filename = config_filename
                 self.list_datafiles = []
 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'FAST_BUFFER_DIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'NUM_SIMULTANEOUS_DMS_PREPSUBBAND', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR' 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'NUM_SIMULTANEOUS_DMS_PREPSUBBAND', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
 
@@ -1699,7 +1696,9 @@ class SurveyConfiguration(object):
                         elif key == "ROOT_WORKDIR":                                 
                                 self.root_workdir                     = self.dict_survey_configuration[key]
                         elif key == "FAST_BUFFER_DIR":
-                                self.fast_buffer_dir                  = self.dict_survey_configuration[key] 
+                                self.fast_buffer_dir                  = self.dict_survey_configuration[key]
+                        elif key == "FLAG_KEEP_DATA_IN_BUFFER_DIR":
+                                self.flag_keep_data_in_buffer_dir     = int(self.dict_survey_configuration[key])
                         elif key == "FILE_LIST_DATAFILES":
                                 self.list_datafiles_filename          = self.dict_survey_configuration[key]
                         elif key == "FILE_COMMON_BIRDIES":                           self.file_common_birdies              = self.dict_survey_configuration[key]
@@ -1874,6 +1873,7 @@ def init_default(observation_filename):
         dict_survey_configuration_default_values = {'SEARCH_LABEL':                        "%s                # Label of this search project" % os.path.basename(os.getcwd()),
                                                      'ROOT_WORKDIR':                        "%s               # Path of the root working directory" % os.getcwd(),
                                                      'FAST_BUFFER_DIR':                     "\"\"             # Path of a SSD/Fast memory buffer (minimizes I/O bottlenecks, optional)",
+                                                     'FLAG_KEEP_DATA_IN_BUFFER_DIR':        "0                # Keep copy of observation in buffer after searching? (1=yes, 0=no)",
                                                      'DATA_TYPE':                           "%-18s            # Options: filterbank, psrfits" % (default_file_format),
                                                      'PRESTO':                              "%s               # Path of the main PRESTO installation" % presto_path,
                                                      'PRESTO_GPU':                          "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,
@@ -1948,6 +1948,7 @@ def init_default(observation_filename):
                 f.write("%-35s %s\n" % ('SEARCH_LABEL', dict_survey_configuration_default_values['SEARCH_LABEL']))
                 f.write("%-35s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
                 f.write("%-35s %s\n" % ('FAST_BUFFER_DIR', dict_survey_configuration_default_values['FAST_BUFFER_DIR']))
+                f.write("%-35s %s\n" % ('FLAG_KEEP_DATA_IN_BUFFER_DIR', dict_survey_configuration_default_values['FLAG_KEEP_DATA_IN_BUFFER_DIR']))
                 f.write("%-35s %s\n" % ('DATA_TYPE', dict_survey_configuration_default_values['DATA_TYPE']))
                 f.write("\n")
                 f.write("# PRESTO installations and GPU acceleration\n")
@@ -2954,8 +2955,14 @@ if config.flag_step_folding == 1:
                 os.system(cmd_pm_run_multithread)
 
                 if config.list_Observations[i].file_buffer_copy != "":
-                        print()
-                        print("Remember to delete the copy of '%s' from the buffer directory" % (config.list_Observations[i].file_nameonly))
-                        #print("Removing copy of '%s' from the buffer..." % config.list_Observations[i].file_nameonly); sys.stdout.flush()
-                        #os.remove(config.list_Observations[i].file_buffer_copy)
-                        #print("done!")
+                        if config.flag_keep_data_in_buffer_dir == 1:
+                                print()
+                                print("Keeping a copy of '%s' from the buffer directory (%s)." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir))
+                                print("Remember to delete if you are not using it further.")
+                        else:
+                                print("Removing copy of '%s' from the buffer directory (%s)..." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir), end=""), ; sys.stdout.flush()
+                                os.remove(config.list_Observations[i].file_buffer_copy)
+                                print("done!")
+
+
+print()
