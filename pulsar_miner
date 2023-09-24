@@ -1837,7 +1837,9 @@ def init_default(observation_filename):
         # Create known_pulsars folder
         if not os.path.exists("known_pulsars"):
                 os.mkdir("known_pulsars")
-
+        if not os.path.exists("01_RFIFIND"):
+                os.mkdir("01_RFIFIND")
+                
         default_file_format = "filterbank"
         default_obs = "<observation>"
         if observation_filename != "":
@@ -2038,6 +2040,9 @@ def init_default(observation_filename):
         print("Some common birdies written on 'common_birdies.txt'.")
         print()
         print("Place the parfiles of the already-known pulsars, if any, in 'known_pulsars'")
+        print()
+        print("It is also recommended to create the rfifind mask of the observation separately, so as to make sure that a reasonable fraction of the band is masked.")
+        print("Once you are happy with the mask, place all the relative files in the '01_RFIFIND' directory, making sure that their basenames correspond to the basename of the observation (e.g. 'myobs.fil' must have corresponding 'myobs_rfifind.mask', 'myobs_rfifind.inf' etc. files in '01_RFIFIND'), so that PULSAR_MINER can associate the mask to the observation and use it.")
         print()
         print("Now edit the config file, adjust the parameters and run the pipeline with:")
         print("%s -config %s -obs %s" % (os.path.basename(sys.argv[0]), default_cfg_filename, default_obs))
