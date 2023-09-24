@@ -2102,7 +2102,7 @@ else:
                 elif (sys.argv[j] == "-V"):
                         verbosity_level = 3
 
-
+pipeline_start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 if verbosity_level >= 1:
         size_logo = 64
         size_string_version = len(string_version)
@@ -2114,6 +2114,9 @@ if verbosity_level >= 1:
         print("#" + " "*25 + "%s" % ("PULSAR MINER") + " "*25 + "#")
         print("#" + " "*(dsize + dsize_offset) + "%s" % (string_version) + " "*dsize + "#")
         print("#"*size_logo)
+        print()
+        print("Command: %s" % (" ".join(sys.argv)))
+        print("Launch date_time: %s" % (pipeline_start_datetime_str) )
         print()
 
 config = SurveyConfiguration(config_filename, verbosity_level)
@@ -2202,6 +2205,7 @@ if verbosity_level >= 2:
 
 LOG_dir = os.path.join(config.root_workdir, "LOG")
 
+
 if verbosity_level >= 1:
         print()
         print()
@@ -2214,13 +2218,12 @@ for i in range(len(config.list_Observations)):
                 print("%s: \033[1m %s \033[0m  (%.2f s)" % ("Observation", config.list_Observations[i].file_nameonly, config.list_Observations[i].T_obs_s))
                 print()
 
-      
-
-
-
-
-
-
+        # Check that observation base name is max 32-character long, to prevent file name truncation with prepfold
+        if len(config.list_Observations[i].file_basename) > 32:
+                print("%sERROR:%s Base name of observation ('%s') too long!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, config.list_Observations[i].file_basename))
+                print("       Please rename the file so that its base name (= file name without the extension) be max 32 characters long.")
+                exit()
+        
         
         if config.fast_buffer_dir != "":
                 if os.path.exists(config.fast_buffer_dir):
