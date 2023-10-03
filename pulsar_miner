@@ -31,7 +31,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (25Sep2023)"
+string_version = "2.0-beta (03Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -1918,7 +1918,7 @@ def init_default(observation_filename):
                                                      'REDNOISE_FLAGS':                      "\"\"             # Any additional options to give to REDNOISE",
                                                      'ACCELSEARCH_FLAGS':                   "\"\"             # Any additional options to give to ACCELSEARCH",
                                                      'ACCELSEARCH_GPU_FLAGS':               "\"\"             # Any additional options to give to ACCELSEARCH of PRESTO_ON_GPU",
-                                                     'PREPFOLD_FLAGS':                     "\"-ncpus 4 -n 64\"     # Any additional options to give to PREPFOLD",
+                                                     'PREPFOLD_FLAGS':                     "\"-ncpus %d -n 64\"     # Any additional options to give to PREPFOLD" % (multiprocessing.cpu_count()/4),
                                                      'NUM_SIMULTANEOUS_DMS_PREPSUBBAND':    "1000            # Number of simultaneous DM values processed at once by PREPSUBBAND (max 1000) ",
                                                      'FLAG_REMOVE_FFTFILES':                "1               # Remove FFT files after searching to save disk space? (1=yes, 0=no)",
                                                      'FLAG_REMOVE_DATFILES_OF_SEGMENTS':    "1               # Remove .dat files of the shorter segments after searching to save disk space? (1=yes, 0=no)",
@@ -1926,7 +1926,7 @@ def init_default(observation_filename):
                                                      'USE_CUDA':                            "%s               # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,
                                                      'CUDA_IDS':                            "0               # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",
                                                      'LIST_SEGMENTS':                       "full             # Comma-separated lengths (in minutes) of chunks to search (e.g. \"full,20,10\")",
-                                                     'NUM_SIMULTANEOUS_FOLDS':              "%-3d             # Max number of prepfold instances to run at once" % (multiprocessing.cpu_count()/2) ,
+                                                     'NUM_SIMULTANEOUS_FOLDS':              "1               # Max number of prepfold instances to run at once",
                                                      'SIFTING_FLAG_REMOVE_DUPLICATES' :     "1               # Remove candidate duplicates when sifting? (1=yes, 0=no)",
                                                      'SIFTING_FLAG_REMOVE_DM_PROBLEMS' :    "1               # Remove candidates that appear in few DM values? (1=yes, 0=no)",
                                                      'SIFTING_FLAG_REMOVE_HARMONICS' :      "1               # Remove harmoniacally related candidates? (1=yes, 0=no)",
