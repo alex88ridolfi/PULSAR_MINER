@@ -31,7 +31,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (03Oct2023)"
+string_version = "2.0-beta (07Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -535,7 +535,7 @@ def sift_candidates(work_dir, LOG_basename,  dedispersion_dir, observation_basen
         return candidates
 
 
-def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, seg, ck, T_obs_s, candidate, ignorechan_list, mask, other_flags_prepfold="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, what_fold="rawdata", num_simultaneous_folds=1):
+def fold_candidate(work_dir, LOG_basename, observation, dir_dedispersion, obs, seg, ck, candidate, ignorechan_list, other_flags_prepfold="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, what_fold="rawdata", num_simultaneous_folds=1):
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
         cand = candidate
@@ -557,25 +557,27 @@ def fold_candidate(work_dir, LOG_basename, raw_datafile, dir_dedispersion, obs, 
         else:
                 flag_ignorechan = ""
 
+        if '-nsub' not in other_flags_prepfold:
+                other_flags_prepfold = other_flags_prepfold + " -nsub %d" % (observation.nchan)
 
         if what_fold =="timeseries":
                 file_to_fold = os.path.join(dir_dedispersion, obs, seg, ck, cand.filename.split("_ACCEL")[0] + ".dat")
                 cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -o ts_fold_%s_%s_%s_DM%.2f_%s   %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
                 execute_and_log(cmd_prepfold, work_dir, log_abspath, dict_env, flag_LOG_append)
         elif what_fold =="rawdata":
-                file_to_fold = raw_datafile
+                file_to_fold = observation.file_abspath
                 if seg == "full":
-                        cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -dm %.2f %s -mask %s -o raw_fold_%s_%s_%s_DM%.2f_%s    %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, cand.DM, flag_ignorechan, mask, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
+                        cmd_prepfold = "prepfold %s -noxwin -accelcand %d -accelfile %s/%s.cand -dm %.2f %s -mask %s -o raw_fold_%s_%s_%s_DM%.2f_%s    %s" % (other_flags_prepfold, cand.candnum, dir_accelfile, cand.filename, cand.DM, flag_ignorechan, observation.mask, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
                 else:
                         segment_min = np.float64(seg.replace("m", ""))
                         i_chunk = int(ck.replace("ck", ""))
-                        T_obs_min = T_obs_s / 60.
+                        T_obs_min = observation.T_obs_s / 60.
                         start_frac = (i_chunk * segment_min) / T_obs_min
                         end_frac = ((i_chunk + 1) * segment_min) / T_obs_min
                         if end_frac > 1:
                                 end_frac = 1.0
 
-                        cmd_prepfold = "prepfold %s -start %.5f -end %.5f -noxwin -accelcand %d -accelfile %s/%s.cand -dm %.2f %s -mask %s -o raw_fold_%s_%s_%s_DM%.2f_%s    %s" % (other_flags_prepfold, start_frac, end_frac, cand.candnum, dir_accelfile, cand.filename, cand.DM, flag_ignorechan, mask, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
+                        cmd_prepfold = "prepfold %s -start %.5f -end %.5f -noxwin -accelcand %d -accelfile %s/%s.cand -dm %.2f %s -mask %s -o raw_fold_%s_%s_%s_DM%.2f_%s    %s" % (other_flags_prepfold, start_frac, end_frac, cand.candnum, dir_accelfile, cand.filename, cand.DM, flag_ignorechan, observation.mask, obs, seg, ck, cand.DM, str_zmax_wmax, file_to_fold)
 
                 file_script_fold.write("%s\n" % cmd_prepfold)
                 if verbosity_level >= 2:
@@ -2284,21 +2286,25 @@ for i in range(len(config.list_Observations)):
                 N_chunks = int(config.list_Observations[i].T_obs_s / segment_length_s)
                 
                 fraction_left = (config.list_Observations[i].T_obs_s % segment_length_s) / segment_length_s
-
-                if fraction_left >= 0.80:
-                        N_chunks = N_chunks + 1
-                        print("%sWARNING:%s Last chunk of segment '%sm' is in fact a bit shorter (%.2f minutes)!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
-                        #time.sleep(5)
-                        
-                elif fraction_left > 0.10 and fraction_left < 0.80:
-                        print()
-                        print("%sWARNING:%s Last chunk of segment '%sm' is only %d minutes and will be ignored!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
-                        #time.sleep(5)
                 
                 for ck in range(N_chunks):
                         chunk_label = "ck%02d" % (ck)
                         config.dict_search_structure[config.list_Observations[i].file_basename][segment_label][chunk_label] = {'candidates': []}
-                print("    Segment: %8s     ---> %2d chunks (%s)" % (segment_label, N_chunks, ", ".join(sorted(config.dict_search_structure[config.list_Observations[i].file_basename][segment_label].keys()))))
+                print("    Segment: %8s     ---> %2d chunks (%s)" % (segment_label, N_chunks, ", ".join(sorted(config.dict_search_structure[config.list_Observations[i].file_basename][segment_label].keys()))), end=' ')
+
+
+                if fraction_left >= 0.80:
+                        N_chunks = N_chunks + 1
+                        print(" --> %sWARNING:%s Last chunk of segment '%sm' is in fact a bit shorter (%.2f minutes)!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
+                        #time.sleep(5)
+                elif fraction_left > 0.10 and fraction_left < 0.80:
+                        print()
+                        print("--> %sWARNING:%s Last chunk of segment '%sm' is only %d minutes and will be ignored!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
+                        #time.sleep(5)
+                else:
+                        print()
+
+                
 if verbosity_level >= 1:
         print()
         print("*******************************************************************")
@@ -2912,22 +2918,20 @@ if config.flag_step_folding == 1:
                                                 if os.path.exists(file_to_fold):
 
                                                         fold_candidate(work_dir_candidate_folding,
-                                                                       LOG_basename,
-                                                                       config.list_Observations[i].file_abspath,
-                                                                       dir_dedispersion,
-                                                                       obs,
-                                                                       seg,
-                                                                       ck,
-                                                                       config.list_Observations[i].T_obs_s,
-                                                                       candidate,
-                                                                       config.ignorechan_list,
-                                                                       config.list_Observations[i].mask,
-                                                                       config.prepfold_flags,
-                                                                       config.presto_env,
-                                                                       verbosity_level,
-                                                                       1,
-                                                                       "timeseries",
-                                                                       config.num_simultaneous_folds
+                                                                LOG_basename,
+                                                                config.list_Observations[i],
+                                                                dir_dedispersion,
+                                                                obs,
+                                                                seg,
+                                                                ck,
+                                                                candidate,
+                                                                config.ignorechan_list,
+                                                                config.prepfold_flags,
+                                                                config.presto_env,
+                                                                verbosity_level,
+                                                                1,
+                                                                "timeseries",
+                                                               config.num_simultaneous_folds
                                                         )
 
                                                         tend_folding_cand_ts = time.time()
@@ -2953,25 +2957,21 @@ if config.flag_step_folding == 1:
 
                                                 # print "FOLDING CANDIDATE RAW %d/%d of %s: seg %s / %s ..." % (count_folded_raw, count_candidates_to_fold, obs, seg, ck), ; sys.stdout.flush()
                                                 fold_candidate(work_dir_candidate_folding,
-                                                                                     LOG_basename,
-                                                                config.list_Observations[i].file_abspath,
+                                                                LOG_basename,
+                                                                config.list_Observations[i],
                                                                 dir_dedispersion,
                                                                 obs,
                                                                 seg,
                                                                 ck,
-                                                                config.list_Observations[i].T_obs_s,
                                                                 candidate,
                                                                 config.ignorechan_list,
-                                                                config.list_Observations[i].mask,
-                                                                config.prepfold_flags + " -nsub %d" % (config.list_Observations[i].nchan),
+                                                                config.prepfold_flags,
                                                                 config.presto_env,
                                                                 verbosity_level,
                                                                 1,
                                                                 "rawdata",
-                                                                                     config.num_simultaneous_folds
-                                                                )
-
-                                                # print "done!"
+                                                               config.num_simultaneous_folds
+                                                )
 
                                                 count_folded_raw = count_folded_raw + 1
 
