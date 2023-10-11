@@ -31,7 +31,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (07Oct2023)"
+string_version = "2.0-beta (11Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -1408,11 +1408,14 @@ def make_rfifind_mask(infile, out_dir, LOG_basename, time=2.0, freqsig=6.0, time
         result = get_rfifind_result(mask_file, log_abspath, verbosity_level)
 
 
-def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband):
+def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband, nsubbands):
         list_dict_schemes = []
         output_DDplan_list_lines = output_DDplan.split("\n")
-        index = output_DDplan_list_lines.index("  Low DM    High DM     dDM  DownSamp   #DMs  WorkFract")   + 1
-
+        if nsubbands == 0:
+                index = output_DDplan_list_lines.index("  Low DM    High DM     dDM  DownSamp   #DMs  WorkFract")   + 1
+        else:
+                index = output_DDplan_list_lines.index("  Low DM    High DM     dDM  DownSamp  dsubDM   #DMs  DMs/call  calls  WorkFract")   + 1
+                
         print
         print("+++++++++++++++++++++++++++++++++")
         print(output_DDplan)
@@ -1423,40 +1426,60 @@ def get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband):
                 if output_DDplan_list_lines[index] == "":
                         return list_dict_schemes
                 else:
-                        param = output_DDplan_list_lines[index].split()
-                        low_DM_by_DDplan   = np.float64(param[0])
-                        high_DM_by_DDplan = np.float64(param[1])
-                        dDM = np.float64(param[2])
-                        downsamp = int(param[3])
-                        num_DMs = int(param[4])
+                        if nsubbands == 0:
+                                param = output_DDplan_list_lines[index].split()
+                                low_DM_by_DDplan   = np.float64(param[0])
+                                high_DM_by_DDplan = np.float64(param[1])
+                                dDM = np.float64(param[2])
+                                downsamp = int(param[3])
+                                num_DMs = int(param[4])
 
-                        if num_DMs > N_DMs_per_prepsubband:
-                                N_schemes = int(num_DMs / N_DMs_per_prepsubband) + 1
+                                if num_DMs > N_DMs_per_prepsubband:
+                                        N_schemes = int(num_DMs / N_DMs_per_prepsubband) + 1
 
-                                for n in range(N_schemes-1):
-                                        lowDM   = low_DM_by_DDplan + (n    * N_DMs_per_prepsubband * dDM)
-                                        highDM = lowDM + N_DMs_per_prepsubband * dDM                                
-                                        dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': N_DMs_per_prepsubband}
-                                        if verbosity_level >= 2:
-                                                print("dict_scheme for loop = ",  dict_scheme)
+                                        for n in range(N_schemes-1):
+                                                lowDM   = low_DM_by_DDplan + (n    * N_DMs_per_prepsubband * dDM)
+                                                highDM = lowDM + N_DMs_per_prepsubband * dDM                                
+                                                dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': N_DMs_per_prepsubband}
+                                                if verbosity_level >= 2:
+                                                        print("dict_scheme for loop = ",  dict_scheme)
+                                                list_dict_schemes.append(dict_scheme)
+
+                                        lowDM =  round(low_DM_by_DDplan + (N_schemes-1)   * N_DMs_per_prepsubband * dDM,             3 ) #round to third decimal digit
+                                        highDM = round(high_DM_by_DDplan, 3)
+                                        numDMs = int(round((highDM - lowDM) / dDM, 3))
+				
+                                        dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': numDMs}
                                         list_dict_schemes.append(dict_scheme)
 
-                                lowDM =  round(low_DM_by_DDplan + (N_schemes-1)   * N_DMs_per_prepsubband * dDM,             3 ) #round to third decimal digit
-                                highDM = round(high_DM_by_DDplan, 3)
-                                numDMs = int(round((highDM - lowDM) / dDM, 3))
-				
-                                dict_scheme = {'loDM': lowDM, 'highDM': highDM, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': numDMs}
-                                list_dict_schemes.append(dict_scheme)
+                                else:
+                                        dict_scheme = {'loDM': low_DM_by_DDplan, 'highDM': high_DM_by_DDplan, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': num_DMs}
+                                        if verbosity_level >= 2:
+                                                print("num_DMs else =", num_DMs)
+                                                print("dict_scheme else =", dict_scheme)
+                                        list_dict_schemes.append(dict_scheme)
+
+                                
+                                
+                        elif nsubbands > 0:
+                                param = output_DDplan_list_lines[index].split()
+                                low_DM_by_DDplan   = np.float64(param[0])
+                                high_DM_by_DDplan = np.float64(param[1])
+                                dDM = np.float64(param[2])
+                                downsamp = int(param[3])
+                                dsubDM = np.float64(param[4])
+                                num_DMs = int(param[5])
+                                num_DMs_percall = int(param[6])
+                                N_calls = int(param[7])
+
                                 
 
+                                for k in range(N_calls):
+                                        dict_scheme = {'loDM': round(low_DM_by_DDplan + k*dsubDM, 3), 'highDM': round(low_DM_by_DDplan+(k+1)*dsubDM, 3), 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': num_DMs_percall}
+                                        list_dict_schemes.append(dict_scheme)
 
-                        else:
-                                dict_scheme = {'loDM': low_DM_by_DDplan, 'highDM': high_DM_by_DDplan, 'dDM': dDM, 'downsamp': downsamp, 'num_DMs': num_DMs}
-                                if verbosity_level >= 2:
-                                        print("num_DMs else =", num_DMs)
-                                        print("dict_scheme else =", dict_scheme)
-                                list_dict_schemes.append(dict_scheme)
 
+                                        
                 index = index + 1
 
 
@@ -1467,7 +1490,7 @@ def check_prepsubband_result(work_dir, list_DD_schemes, verbosity_level=1):
                 print("check_prepsubband_result:: work_dir = ", work_dir)
 
         for i in range(N_schemes):
-                for dm in np.arange(list_DD_schemes[i]['loDM'],   list_DD_schemes[i]['highDM'] - 0.5*list_DD_schemes[i]['dDM']        , list_DD_schemes[i]['dDM']):
+                for dm in np.arange(list_DD_schemes[i]['loDM'],   list_DD_schemes[i]['highDM'] - 0.5*list_DD_schemes[i]['dDM']      , list_DD_schemes[i]['dDM']):
                         if verbosity_level >= 2:
                                 print("check_prepsubband_result:: Looking for: ", os.path.join(work_dir, "*DM%.2f.dat"%(dm) ),  os.path.join(work_dir, "*DM%.2f.inf"%(dm) ))
                                 print("check_prepsubband_result:: This is what I found: %s, %s" % ([ x for x in glob.glob(os.path.join(work_dir, "*DM%.2f.dat"%(dm))) if not "_red" in x]  , [ x for x in glob.glob(os.path.join(work_dir, "*DM%.2f.inf"%(dm))) if not "_red" in x]    ))
@@ -1485,17 +1508,22 @@ def get_DDplan_scheme(infile, out_dir, LOG_basename, loDM, highDM, DM_coherent_d
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
-
+        
         if np.float64(DM_coherent_dedispersion) == 0:
-                # Implement subbanding calculation!
-                # cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -f %s -b %s -n %s -s %s -t %s" % (infile_basename, loDM, highDM, freq_central_MHz, np.fabs(bw_MHz), nchan, nsubbands, t_samp_s)
-                cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -f %s -b %s -n %s -t %s" % (infile_basename, loDM, highDM, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s)
-        elif np.float64(DM_coherent_dedispersion) > 0:
-                # Implement subbanding calculation!
-                # cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -c %s -f %s -b %s -n %s -s %s -t %s" % (infile_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, np.fabs(bw_MHz), nchan, nsubbands, t_samp_s)
-                cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -c %s -f %s -b %s -n %s -t %s" % (infile_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s)
-                print("Coherent dedispersion enabled with DM = %.3f pc cm-3" % (np.float64(DM_coherent_dedispersion)))
+                if nsubbands == 0:                        
+                        cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -f %s -b %s -n %s -t %s" % (infile_basename, loDM, highDM, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s)
+                else:
+                        cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -f %s -b %s -n %s -t %s -s %s" % (infile_basename, loDM, highDM, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s, nsubbands)
+                        print("Use of subbands enabled with %s subbands (number of channels in the data: %d)" % (nsubbands, nchan))
 
+        elif np.float64(DM_coherent_dedispersion) > 0:
+                print("Coherent dedispersion enabled with DM = %.3f pc cm-3" % (np.float64(DM_coherent_dedispersion)))
+                if nsubbands == 0: 
+                        cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -c %s -f %s -b %s -n %s -t %s" % (infile_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s)
+                else:
+                        cmd_DDplan = "DDplan.py -o ddplan_%s -l %s -d %s -c %s -f %s -b %s -n %s -t %s -s %s" % (infile_basename, loDM, highDM, DM_coherent_dedispersion, freq_central_MHz, np.fabs(bw_MHz), nchan, t_samp_s, nsubbands)
+                        print("Use of subbands enabled with %s subbands (number of channels in the data: %d)" % (nsubbands, nchan))
+                        
         elif np.float64(DM_coherent_dedispersion) < 0:
                 print("ERROR: The DM of coherent dedispersion < 0! Exiting...")
                 exit()
@@ -1503,14 +1531,15 @@ def get_DDplan_scheme(infile, out_dir, LOG_basename, loDM, highDM, DM_coherent_d
         print("Running:  \033[1m %s \033[0m" % (cmd_DDplan))
         output_DDplan = get_command_output(cmd_DDplan, shell_state=False, work_dir=out_dir)
 
-        list_DD_schemes = get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband)
-
+        list_DD_schemes = get_DD_scheme_from_DDplan_output(output_DDplan, N_DMs_per_prepsubband, nsubbands)
+        
         return list_DD_schemes
 
 
 def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, nsubbands=0, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
+        prepsubband_outfilename = "%s_%s_%s" % (infile_basename, segment_label, chunk_label)
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
         N_schemes = len(list_DD_schemes)
@@ -1527,10 +1556,12 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
         print()
         print("%10s %10s %10s %10s %10s " % ("Low DM", "High DM", "dDM",  "DownSamp",   "#DMs"))
         for i in range(N_schemes):
-                print("%10s %10s %10s %10s %10s " % (list_DD_schemes[i]['loDM'], np.float64(list_DD_schemes[i]['loDM']) + int(list_DD_schemes[i]['num_DMs'])*np.float64(list_DD_schemes[i]['dDM']), list_DD_schemes[i]['dDM'],  list_DD_schemes[i]['downsamp'],  list_DD_schemes[i]['num_DMs'] ))
+                offset = 0
+                if i == N_schemes-1 : offset = 1
+                print("%10.3f %10.3f %10s %10s %10d " % (list_DD_schemes[i]['loDM'], np.float64(list_DD_schemes[i]['loDM']) + int(list_DD_schemes[i]['num_DMs'])*np.float64(list_DD_schemes[i]['dDM']), list_DD_schemes[i]['dDM'],  list_DD_schemes[i]['downsamp'],  list_DD_schemes[i]['num_DMs'] + offset))
         print()
         sys.stdout.flush()
-
+        
         if nsubbands == 0:
                 nsubbands = nchan
         elif (nchan % nsubbands != 0):
@@ -1539,6 +1570,8 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
 
         if verbosity_level >= 1:
                 print("Dedispersing with %d subbands (original number of channels: %d)" % (nsubbands, nchan))
+                print()
+                print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mtail -f %s\033[0m'" % (log_abspath))
                 print()
 
         if verbosity_level >= 2:
@@ -1551,18 +1584,22 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                         if verbosity_level >= 2:
                                 print("check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=0) = ", check_prepsubband_result(out_dir, list_DD_schemes, verbosity_level=0))
                                 print("Checking results at: %s" % (out_dir))
-                        if verbosity_level >= 1:
-                                print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mtail -f %s\033[0m'" % (log_abspath))
                         for i in range(N_schemes):
-                                # if Nsamples >= 0:
-                                #       flag_numout = "-numout %d " % (make_even_number(int(Nsamples/np.float64(list_DD_schemes[i]['downsamp']))))
-                                # else:
                                 flag_numout = ""
 
-                                prepsubband_outfilename = "%s_%s_%s" % (infile_basename, segment_label, chunk_label)
-                                cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'], list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                                if i < N_schemes-1:
+                                        str_parentesis = ")"
+                                        cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs']    , list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                                elif i == N_schemes-1:
+                                        str_parentesis = "]"
+                                        cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
+
+                                
                                 if verbosity_level >= 1:
-                                        print("Running prepsubband with scheme %d/%d on observation '%s'..." % (i+1, N_schemes, infile), end=' ')
+                                        loDM = np.float64(list_DD_schemes[i]['loDM'])
+                                        dDM  = np.float64(list_DD_schemes[i]['dDM'])
+                                        hiDM = loDM + int(list_DD_schemes[i]['num_DMs'])*dDM
+                                        print("Running prepsubband for DM range [%s-%s%s pc cm-3 (scheme %d/%d) on observation '%s'..." % (list_DD_schemes[i]['loDM'], hiDM, str_parentesis, i+1, N_schemes, infile), end=' ')
                                         sys.stdout.flush()
 
                                 if verbosity_level >= 2:
@@ -1572,8 +1609,6 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                                 if verbosity_level >= 1:
                                         print("done!")
                                         sys.stdout.flush()
-                                        print()
-                                        print()
 
 
 def check_zapbirds_outfiles2(zapped_fft_filename, verbosity_level=0):
@@ -2596,6 +2631,8 @@ if config.flag_step_dedisperse == 1:
                 print("##################################################################################################")
                 print()
 
+        LOG_basename = "03_prepsubband_and_search_FFT_%s" % (config.list_Observations[i].file_nameonly)
+                
         if verbosity_level >= 2:
                 print("3) DEDISPERSION DE-REDDENING AND PERIODICITY SEARCH: creating working directories...", end=' '); sys.stdout.flush()
         if not os.path.exists(dir_dedispersion):
@@ -2603,6 +2640,9 @@ if config.flag_step_dedisperse == 1:
         if verbosity_level >= 2:
                 print("done!")
                 print("get_DDplan_scheme(config.list_Observations[i].file_abspath, = ", config.list_Observations[i].file_abspath)
+                print("LOG_basename = %s" % LOG_basename)
+
+
         list_DDplan_scheme = get_DDplan_scheme(config.list_Observations[i].file_abspath,
                                                 dir_dedispersion,
                                                 LOG_basename,
@@ -2671,7 +2711,6 @@ if config.flag_step_dedisperse == 1:
                                         print("done!"); sys.stdout.flush()
 
 
-                                LOG_basename = "03_prepsubband_and_search_FFT_%s" % (config.list_Observations[i].file_nameonly)
                                 zapfile = "%s/%s_DM00.00.zaplist" % (dir_birdies, config.list_Observations[i].file_basename)
 
 
