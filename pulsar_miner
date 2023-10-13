@@ -31,7 +31,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (11Oct2023)"
+string_version = "2.0-beta (13Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -1492,7 +1492,7 @@ def check_prepsubband_result(work_dir, list_DD_schemes, verbosity_level=1):
         for i in range(N_schemes):
                 for dm in np.arange(list_DD_schemes[i]['loDM'],   list_DD_schemes[i]['highDM'] - 0.5*list_DD_schemes[i]['dDM']      , list_DD_schemes[i]['dDM']):
                         if verbosity_level >= 2:
-                                print("check_prepsubband_result:: Looking for: ", os.path.join(work_dir, "*DM%.2f.dat"%(dm) ),  os.path.join(work_dir, "*DM%.2f.inf"%(dm) ))
+                                print("check_prepsubband_result:: Looking for: ", [os.path.join(work_dir, "*DM%.2f.dat"%(dm) )],  [os.path.join(work_dir, "*DM%.2f.inf"%(dm) )] )
                                 print("check_prepsubband_result:: This is what I found: %s, %s" % ([ x for x in glob.glob(os.path.join(work_dir, "*DM%.2f.dat"%(dm))) if not "_red" in x]  , [ x for x in glob.glob(os.path.join(work_dir, "*DM%.2f.inf"%(dm))) if not "_red" in x]    ))
                         if len([ x for x in glob.glob(os.path.join(work_dir, "*DM%.2f.dat"%(dm))) if not "_red" in x]   + [ x for x in glob.glob(os.path.join(work_dir, "*DM%.2f.inf"%(dm))) if not "_red" in x] ) != 2:
                                 if verbosity_level >= 2:
@@ -1541,7 +1541,12 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
         infile_basename = os.path.splitext(infile_nameonly)[0]
         prepsubband_outfilename = "%s_%s_%s" % (infile_basename, segment_label, chunk_label)
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
+        file_script_prepsubband_name = "script_prepsubband.txt"
+        file_script_prepsubband_abspath = "%s/%s" % (out_dir, file_script_prepsubband_name)
+        
         log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
+
+        
         N_schemes = len(list_DD_schemes)
 
         string_mask = ""
@@ -1568,6 +1573,17 @@ def dedisperse(infile, out_dir, LOG_basename, segment_label, chunk_label, Nsampl
                 print("ERROR: requested number of subbands is %d, which is not an integer divisor of the number of channels %d! " % (nsubbands, nchan))
                 exit()
 
+        file_script_prepsubband = open(file_script_prepsubband_abspath, "w")
+        for i in range(N_schemes):
+                flag_numout = ""
+                if i < N_schemes-1:
+                        cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs']    , list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                elif i == N_schemes-1:
+                        cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                file_script_prepsubband.write("%s\n" % cmd_prepsubband)
+
+        file_script_prepsubband.close()
+                        
         if verbosity_level >= 1:
                 print("Dedispersing with %d subbands (original number of channels: %d)" % (nsubbands, nchan))
                 print()
