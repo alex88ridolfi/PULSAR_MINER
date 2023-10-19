@@ -31,7 +31,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (13Oct2023)"
+string_version = "2.0-beta (19Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -43,6 +43,20 @@ class colors:
     BOLD = '\033[1m'
     ENDCOLOR = '\033[0m'
 
+def check_presto_path(presto_path, key):
+        if os.path.exists(presto_path):
+                if os.path.exists(presto_path+"/bin/accelsearch"):
+                        return True
+                else:
+                        print("%sERROR%s: %s directory '%s' exists but I could not find 'accelsearch' in %s/bin!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, key, presto_path, presto_path))
+                        print("Please make sure that your %s installation is actually there and working." % (key))
+                        exit()
+                
+        else:
+                print("%sERROR:%s %s directory '%s' does not exist!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, key, presto_path))
+                print("Please make sure that the path of %s in your configuration file is correct." % (key))
+                exit()
+                
 
 def check_if_enough_disk_space(root_workdir, num_DMs, T_obs_s, t_samp_s, list_segments_nofull, flag_remove_fftfiles, flag_remove_datfiles_of_segments):
         disk_space            = shutil.disk_usage(root_workdir)
@@ -1766,9 +1780,12 @@ class SurveyConfiguration(object):
                         elif key == "FILE_COMMON_BIRDIES":                           self.file_common_birdies              = self.dict_survey_configuration[key]
                         elif key == "DATA_TYPE":
                                 self.data_type                        = self.dict_survey_configuration[key]
-                        elif key == "PRESTO":                                        self.presto_env                       = self.dict_survey_configuration[key]
+                        elif key == "PRESTO":
+                                if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
+                                        self.presto_env                       = self.dict_survey_configuration[key]
                         elif key == "PRESTO_GPU":
-                                self.presto_gpu_env                   = self.dict_survey_configuration[key]                                
+                                if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
+                                        self.presto_gpu_env                   = self.dict_survey_configuration[key]                                
                         elif key == "DM_MIN":                                        self.dm_min                           = self.dict_survey_configuration[key]
                         elif key == "DM_MAX":
                                 self.dm_max                           = self.dict_survey_configuration[key]
