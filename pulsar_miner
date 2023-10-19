@@ -1769,8 +1769,18 @@ class SurveyConfiguration(object):
                 for key in list(self.dict_survey_configuration.keys()):
                         if   key == "SEARCH_LABEL":
                                 self.search_label                     = self.dict_survey_configuration[key]
-                        elif key == "ROOT_WORKDIR":                                 
-                                self.root_workdir                     = self.dict_survey_configuration[key]
+                        elif key == "ROOT_WORKDIR":
+                                if self.dict_survey_configuration[key] == "(cwd)":
+                                        self.root_workdir                     = os.getcwd()
+                                        print("ROOT_WORKDIR == '(cwd)' --->  ROOT_WORKDIR set as current working directory '%s' \n" % self.root_workdir)
+                                else:
+                                        self.root_workdir                     = self.dict_survey_configuration[key]
+                                        if os.path.exists(self.root_workdir) == False:
+                                                print("%sERROR:%s %s directory '%s' does not exist!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, key, self.root_workdir ))
+                                                print("Please make sure that the path of %s in your configuration file is correct." % (key))
+                                                print("Alternatively, you can use '(cwd)' to tell PULSAR_MINER to use the Current Working Directory as the ROOT_WORKDIR")
+                                                exit()
+                                                
                         elif key == "FAST_BUFFER_DIR":
                                 self.fast_buffer_dir                  = self.dict_survey_configuration[key]
                         elif key == "FLAG_KEEP_DATA_IN_BUFFER_DIR":
@@ -1952,7 +1962,7 @@ def init_default(observation_filename):
                                 exit()
 
         dict_survey_configuration_default_values = {'SEARCH_LABEL':                        "%s                # Label of this search project" % os.path.basename(os.getcwd()),
-                                                     'ROOT_WORKDIR':                        "%s               # Path of the root working directory" % os.getcwd(),
+                                                     'ROOT_WORKDIR':                        "(cwd)              # Path of the root working directory. Options: /absolute/path or '(cwd)' for current working directory",
                                                      'FAST_BUFFER_DIR':                     "\"\"             # Path of a SSD/Fast memory buffer (minimizes I/O bottlenecks, optional)",
                                                      'FLAG_KEEP_DATA_IN_BUFFER_DIR':        "0                # Keep copy of observation in buffer after searching? (1=yes, 0=no)",
                                                      'DATA_TYPE':                           "%-18s            # Options: filterbank, psrfits" % (default_file_format),
@@ -2262,17 +2272,6 @@ if verbosity_level >= 2:
         config.print_configuration()
 
 sifting.sigma_threshold = config.sifting_sigma_threshold
-
-if verbosity_level >= 2:
-        print("Checking if root '%s' directory exists..." % (config.root_workdir), end=' '); sys.stdout.flush()
-if not os.path.exists(config.root_workdir):
-        if verbosity_level >= 2:
-                print("no. Creating it...", end=' '); sys.stdout.flush()
-        os.mkdir(config.root_workdir)
-        print("done!")
-else:
-        if verbosity_level >= 2:
-                print("yes."); sys.stdout.flush()
 
 if verbosity_level >= 2:
         print("main:: SIFTING.sigma_threshold = ", sifting.sigma_threshold)
