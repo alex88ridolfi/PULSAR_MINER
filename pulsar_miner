@@ -18,20 +18,17 @@ import numpy as np
 try:
         from presto import filterbank, infodata, parfile, psr_utils, psrfits, rfifind, sifting
 except:
-        import filterbank
-        import infodata
-        import parfile
-        import psr_utils
-        import psrfits
-        import rfifind
-        import sifting
+        print("\nERROR: Could not not load the PRESTO python modules!")
+        print("Please make sure that your PRESTO python modules are actually installed and working.\n")
+        exit()
+        
 
 import warnings
 from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (19Oct2023)"
+string_version = "2.0-beta (20Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
