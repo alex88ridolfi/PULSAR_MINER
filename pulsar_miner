@@ -28,7 +28,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (22Oct2023)"
+string_version = "2.0-beta (23Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -1030,7 +1030,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, segment_label, chunk
         #########################################################################################################
         #                                     NON-PARALLELIZED JERK SEARCH
         #########################################################################################################
-        if num_simultaneous_jerksearches == 1:
+        if num_simultaneous_jerksearches == 1 or jerksearch_wmax == 0:
                 for i in range(N_files_to_search):
                         print()
                         if verbosity_level >= 2:
@@ -1143,7 +1143,7 @@ def periodicity_search_FFT(work_dir, LOG_basename, zapfile, segment_label, chunk
         # We will first realfft, deredden and zap all the dat files, then search all the .fft files in parallel
         #########################################################################################################
         
-        elif num_simultaneous_jerksearches > 1:
+        elif num_simultaneous_jerksearches >= 2 and jerksearch_wmax > 0:
                 list_jerksearch_commands = []
                 list_jerksearch_workdirs = []
                 jerksearch_flags = other_flags_accelsearch
