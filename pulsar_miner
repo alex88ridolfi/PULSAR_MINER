@@ -28,7 +28,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (23Oct2023)"
+string_version = "2.0-beta (24Oct2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -1557,18 +1557,11 @@ def make_rfifind_mask(infile, out_dir, LOG_basename, time=2.0, freqsig=6.0, time
                 print("%s" % (cmd_rfifind))
                 sys.stdout.flush()
 
-        flag_files_present = check_rfifind_outfiles(out_dir, infile_basename)
+        dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
 
-        if flag_files_present == True:
-                if verbosity_level >= 1:
-                        print()
-                        print("WARNING: File %s_rfifind.mask already present. Skipping and checking results..." % (infile_basename), end=' ')
-        else:
-                dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
-
-                execute_and_log(cmd_rfifind, out_dir, log_abspath, dict_env, 0)
-                if verbosity_level >= 1:
-                        print("done!")
+        execute_and_log(cmd_rfifind, out_dir, log_abspath, dict_env, 0)
+        if verbosity_level >= 1:
+                print("done!")
 
         if check_rfifind_outfiles(out_dir, infile_basename) == True:
                 if verbosity_level >= 2:
@@ -2565,18 +2558,37 @@ if not os.path.exists(rfifind_masks_dir):
 
 for i in range(len(config.list_Observations)):
         time.sleep(0.2)
-
         config.list_Observations[i].mask = "%s/%s_rfifind.mask" % (rfifind_masks_dir, config.list_Observations[i].file_basename)
 
-        if config.flag_step_rfifind == 1:
+        flag_mask_present = check_rfifind_outfiles(rfifind_masks_dir, config.list_Observations[i].file_basename)
+
+        # CASE 1: mask not present, STEP_RFIFIND = 0 
+        if flag_mask_present == False and config.flag_step_rfifind == 0:
+                print()
+                print()
+                print("\033[1m  ERROR! mask '%s' not found but STEP_RFIFIND = 0! \033[0m" % (config.list_Observations[i].mask))
+                print()
+                print("You have to create a mask for your observation, in order to run the pipeline.")
+                print()
+                print("Please either set STEP_RFIFIND = 1 in your configuration file, or create your mask separately and copy the relative files into the '01_RFIFIND' directory and retry.")
+                print()
+                exit()
+
+        
+        # CASE 2: mask not present, STEP_RFIFIND = 1
+        if flag_mask_present == False and config.flag_step_rfifind == 1:
                 LOG_basename = "01_rfifind_%s" % (config.list_Observations[i].file_nameonly)
                 log_abspath = "%s/LOG_%s.txt" % (LOG_dir, LOG_basename)
+                
+
                 if verbosity_level >= 1:
+                        print()
+                        print("Mask not found in the 01_RFIFIND folder. Will make the mask using the parameters specified in the configuration file '%s'. " % (config_filename))
+                        print()
                         print("\033[1m >> TIP:\033[0m Check rfifind progress with '\033[1mtail -f %s\033[0m'" % (log_abspath))
                         print()
                         print("Creating rfifind mask of observation %3d/%d: '%s'..." % (i+1, len(config.list_Observations), config.list_Observations[i].file_nameonly), end=' ')
                         sys.stdout.flush()
-
 
                 make_rfifind_mask(config.list_Observations[i].file_abspath,
                                    rfifind_masks_dir,
@@ -2592,36 +2604,66 @@ for i in range(len(config.list_Observations)):
                                    config.presto_env,
                                    verbosity_level
                                    )
+        
+        # CASE 3: mask is already present, STEP_RFIFIND = 1
+        elif flag_mask_present == True and config.flag_step_rfifind == 1:
+                if verbosity_level >= 1:
+                        print()
+                        print("GOOD! Mask '%s' already present! Will not create a new one." % (config.list_Observations[i].mask)  )
+                        print()
+                        print("STEP_RFIFIND=1. Will check that the mask found is ok.")
+                        print()
+                else:
+                        pass
+
+                
+        # CASE 4: mask is already present, STEP_RFIFIND = 0
+        elif flag_mask_present == True and config.flag_step_rfifind == 0:
+                if verbosity_level >= 1:
+                        print()
+                        print("GOOD! Mask '%s' already present! Will not create a new one." % (config.list_Observations[i].mask)  )
+                        print()
+                        print("%sWARNING:%s%s STEP_RFIFIND=0. Will skip the step, and trust that the mask found is ok.%s" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, colors.BOLD, colors.ENDCOLOR))
+                        print()
+
+                else:
+                        pass
+
+
+        # If STEP_RFIFIND = 1, check the mask before continuing 
+        if  config.flag_step_rfifind == 1:
+                print("Checking what percentage of the band is masked (this may take a while, depending on the size of the mask)...", end=' '); sys.stdout.flush()
                 mask = rfifind.rfifind(config.list_Observations[i].mask)
                 fraction_masked_channels = np.float64(len(mask.mask_zap_chans))/mask.nchan
+                print("done!"); sys.stdout.flush()
                 if verbosity_level >= 1:
                         print()
                         print("RFIFIND: Percentage of frequency channels masked: %.2f%%" % (fraction_masked_channels * 100.))
                         print()
-                if fraction_masked_channels > 0.5:
+                if fraction_masked_channels > 0.5 and fraction_masked_channels <=0.95:
                         print()
                         print("************************************************************************************************")
-                        print("\033[1m !!! WARNING : %.2f%% of the band was masked! That seems quite a lot! \033[0m !!!" % (fraction_masked_channels * 100.))
-                        print("\033[1m !!! You may want to adjust the RFIFIND parameters in the configuration file (e.g. try to increase RFIFIND_FREQSIG) \033[0m")
+                        print("!!! %sWARNING%s%s: %.2f%% of the band was masked! That seems quite a lot! %s !!!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, colors.BOLD, fraction_masked_channels * 100., colors.ENDCOLOR))
+                        print("!!! If you think it is too much, try to adjust the RFIFIND parameters in the configuration file (e.g. increasing RFIFIND_FREQSIG)")
                         print("************************************************************************************************")
                         time.sleep(10)
 
-        elif config.flag_step_rfifind == 0:
-                if verbosity_level >= 1:
-                        print("STEP_RFIFIND = %s          ---> I will not create the mask, I will only look for the one already present in the 01_RFIFIND folder" % (config.flag_step_rfifind))
-
-                if not os.path.exists(config.list_Observations[i].mask):
+                if fraction_masked_channels > 0.95:
                         print()
-                        print()
-                        print("\033[1m  ERROR! File '%s' not found! \033[0m" % (config.list_Observations[i].mask))
-                        print()
-                        print("You must create a mask for your observation, in order to run the pipeline.")
-                        print("Set STEP_RFIFIND = 1 in your configuration file and retry.")
-                        print()
+                        print("************************************************************************************************")
+                        print("!!! %sERROR%s%s: %.2f%% of the band was masked! This is too much. %s!!!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, colors.BOLD, fraction_masked_channels * 100., colors.ENDCOLOR))
+                        print("!!!")
+                        print("!!! %sPlease adjust the RFIFIND parameters in the configuration file so that  the percentage of%s" % (colors.BOLD, colors.ENDCOLOR))
+                        print("!!! %schannels masked is (possibly much) less than 95%% and retry. %s" % (colors.BOLD, colors.ENDCOLOR))
+                        print("************************************************************************************************")
                         exit()
-                else:
-                        print()
-                        print("File '%s' found! Using it as the mask." % (config.list_Observations[i].mask))
+
+
+
+                        
+        
+
+
 
 
         weights_file = config.list_Observations[i].mask.replace(".mask", ".weights")
@@ -2683,8 +2725,7 @@ if config.flag_step_zaplist == 1:
                           verbosity_level
                           )
                 if verbosity_level >= 1:
-                        print("done!")
-                        sys.stdout.flush()
+                        print("done!"); sys.stdout.flush()
 
 
         if verbosity_level >= 2:
