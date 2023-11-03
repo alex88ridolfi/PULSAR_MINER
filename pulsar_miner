@@ -28,7 +28,7 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (24Oct2023)"
+string_version = "2.0-beta (03Nov2023)"
 
 class colors:
     HEADER = '\033[95m'
@@ -2458,7 +2458,7 @@ for i in range(len(config.list_Observations)):
                         config.fast_buffer_dir = ""
                         #time.sleep(10)
 
-                
+
         config.dict_search_structure[config.list_Observations[i].file_basename] = {}
         for s in config.list_segments:
                 if verbosity_level >= 2:
@@ -2472,26 +2472,28 @@ for i in range(len(config.list_Observations)):
                         segment_length_s = np.float64(s) * 60
                         segment_label = "%dm" % (segment_length_min)
                 config.dict_search_structure[config.list_Observations[i].file_basename][segment_label] = {}
-                N_chunks = int(config.list_Observations[i].T_obs_s / segment_length_s)
-                
-                fraction_left = (config.list_Observations[i].T_obs_s % segment_length_s) / segment_length_s
-                
-                for ck in range(N_chunks):
-                        chunk_label = "ck%02d" % (ck)
-                        config.dict_search_structure[config.list_Observations[i].file_basename][segment_label][chunk_label] = {'candidates': []}
-                print("    Segment: %8s     ---> %2d chunks (%s)" % (segment_label, N_chunks, ", ".join(sorted(config.dict_search_structure[config.list_Observations[i].file_basename][segment_label].keys()))), end=' ')
 
+                N_chunks = int(config.list_Observations[i].T_obs_s / segment_length_s)
+                fraction_left = (config.list_Observations[i].T_obs_s % segment_length_s) / segment_length_s
 
                 if fraction_left >= 0.80:
                         N_chunks = N_chunks + 1
                         print(" --> %sWARNING:%s Last chunk of segment '%sm' is in fact a bit shorter (%.2f minutes)!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
                         #time.sleep(5)
+
                 elif fraction_left > 0.10 and fraction_left < 0.80:
                         print()
                         print("--> %sWARNING:%s Last chunk of segment '%sm' is only %d minutes and will be ignored!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
                         #time.sleep(5)
                 else:
                         print()
+
+
+                for ck in range(N_chunks):
+                        chunk_label = "ck%02d" % (ck)
+                        config.dict_search_structure[config.list_Observations[i].file_basename][segment_label][chunk_label] = {'candidates': []}
+
+                print("    Segment: %8s     ---> %2d chunks (%s)" % (segment_label, N_chunks, ", ".join(sorted(config.dict_search_structure[config.list_Observations[i].file_basename][segment_label].keys()))), end=' ')
 
                 
 if verbosity_level >= 1:
