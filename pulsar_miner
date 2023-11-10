@@ -32,7 +32,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version_full = "2.0-beta (10Nov2023)"
 string_version = "10Nov2023"
-number_version = 20231110.2
+number_version = 20231110.3
 
 class colors:
     HEADER = '\033[95m'
@@ -74,10 +74,19 @@ def update_pulsar_miner(dir_pulsar_miner, string_this_version, string_latest_ver
         try:
                 import tarfile
                 parent_dir_pulsar_miner = "/".join(dir_pulsar_miner.split("/")[:-1])
-                tarred_file_abspath = os.path.join(parent_dir_pulsar_miner, "PULSAR_MINER_%s.tar" % (string_this_version))
+                pulsar_miner_dirname = dir_pulsar_miner.split("/")[-1]
+
+                bck_temp_dir_abspath = "%s_%s_bck" % (dir_pulsar_miner, string_this_version)
+                bck_temp_dirname = "%s_%s_bck" % (pulsar_miner_dirname, string_this_version)
+
+                tarred_file_abspath = os.path.join(parent_dir_pulsar_miner, "PULSAR_MINER_%s_bck.tar" % (string_this_version))
                 tarred_file = tarfile.open(tarred_file_abspath,"w")
-                tarred_file.add(parent_dir_pulsar_miner)
+                shutil.copytree(dir_pulsar_miner, bck_temp_dir_abspath)
+                os.chdir(parent_dir_pulsar_miner)
+                tarred_file.add(bck_temp_dirname)
                 tarred_file.close()
+                shutil.rmtree(bck_temp_dir_abspath)
+                os.chdir(current_work_dir)
                 print("Old version of PULSAR_MINER backed up in %s." % tarred_file_abspath)
                 print()
         except  Exception as error:
@@ -91,7 +100,7 @@ def update_pulsar_miner(dir_pulsar_miner, string_this_version, string_latest_ver
                 os.chdir(dir_pulsar_miner)
                 os.system("git pull")
                 os.chdir(current_work_dir)
-                print("PULSAR_MINER installation (%s) successfully updated to the latest version (%s)!" % (current_work_dir, string_latest_version) )
+                print("PULSAR_MINER installation (%s) successfully updated to the latest version (%s-%s)!" % (dir_pulsar_miner, string_latest_version, number_latest_version) )
                 print()
 
         except:
