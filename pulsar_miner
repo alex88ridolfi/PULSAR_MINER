@@ -32,7 +32,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version_full = "2.0-beta (10Nov2023)"
 string_version = "10Nov2023"
-number_version = 20231110.1
+number_version = 20231110.2
 
 class colors:
     HEADER = '\033[95m'
@@ -51,7 +51,7 @@ def check_for_updates(number_this_version, string_this_version, flag_verbose=Fal
 
         try:
                 top_line = urllib.request.urlopen(URL_version_history).read().decode('utf-8').split("\n")[0]
-                number_latest_version = int(top_line.split(":")[-1].split("(")[0])
+                number_latest_version = np.float64(top_line.split(":")[-1].split("(")[0].strip())
                 string_latest_version = top_line.split("(")[1].split(")")[0]
                 
                 return (number_latest_version, string_latest_version)
@@ -2400,15 +2400,15 @@ else:
                 elif (sys.argv[j] == "-update"):
                         number_latest_version, string_latest_version = check_for_updates(number_version, string_version, flag_verbose=True)
                         if number_latest_version > number_version:
-                                print("%sA new version (%s) of PULSAR_MINER is available (your version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_version, colors.ENDCOLOR))
+                                print("%sA new version (%s-%s) of PULSAR_MINER is available (your version: %s-%s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, number_latest_version, string_version, number_version, colors.ENDCOLOR))
                                 string_answer = input("Proceed and install the new version? (y/n): ")
                                 if string_answer == "y" or string_answer == "Y":
                                         update_pulsar_miner(dir_pulsar_miner, string_version, string_latest_version)
                         elif  number_latest_version == number_version:
-                                print("%sGOOD NEWS!%s Your PULSAR_MINER is up-to-date! (current version: %s)." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, string_version))
+                                print("%sGOOD NEWS!%s Your PULSAR_MINER is up-to-date! (current version: %s-%s)." % (colors.OKGREEN+colors.BOLD, colors.ENDCOLOR, string_version, number_version))
                                
                         elif number_latest_version < number_version:
-                                print("Your PULSAR_MINER version (%s) is actually ahead of the online repo (%s)! :)" % (string_version, string_latest_version))
+                                print("Your PULSAR_MINER version (%s-%s) is actually ahead of the online repo (%s-%s)! :)" % (string_version, number_version, string_latest_version, number_latest_version))
                         print()
                         exit()
                         
@@ -2432,7 +2432,7 @@ if verbosity_level >= 1:
 
 number_latest_version, string_latest_version = check_for_updates(number_version, string_version, flag_verbose=False)
 if number_latest_version > number_version:
-        print("%sTIP: A new version (%s) of PULSAR_MINER is available (current version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_version, colors.ENDCOLOR))
+        print("%sTIP: A new version (%s-%s) of PULSAR_MINER is available (current version: %s-%s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, number_latest_version, string_version, number_version, colors.ENDCOLOR))
         print("           Run 'pulsar_miner -update' to install the latest version.")
         print()
         time.sleep(5)
