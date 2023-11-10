@@ -1,3 +1,5 @@
+CURRENT_VERSION: 20231107 (07Nov2023)
+
 Version 2.0  (22Sep2021)
 - Switched to Python 3
 - FLAG_REMOVE_DATFILES_OF_SEGMENTS = 1 by default
