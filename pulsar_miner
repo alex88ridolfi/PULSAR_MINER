@@ -14,6 +14,7 @@ import random
 import time
 import datetime
 import numpy as np
+import urllib
 
 try:
         from presto import filterbank, infodata, parfile, psr_utils, psrfits, rfifind, sifting
@@ -21,6 +22,7 @@ except:
         print("\nERROR: Could not not load the PRESTO python modules!")
         print("Please make sure that your PRESTO python modules are actually installed and working.\n")
         exit()
+
         
 
 import warnings
@@ -28,7 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version = "2.0-beta (07Nov2023)"
+string_version_full = "2.0-beta (10Nov2023)"
+string_version = "10Nov2023"
+number_version = 20231110
 
 class colors:
     HEADER = '\033[95m'
@@ -40,6 +44,74 @@ class colors:
     BOLD = '\033[1m'
     ENDCOLOR = '\033[0m'
 
+
+def check_for_updates(number_this_version, string_this_version, flag_ask_to_update=False):
+        URL_version_history="https://raw.githubusercontent.com/alex88ridolfi/PULSAR_MINER/master/VERSION_HISTORY"
+        flag_can_update = False
+
+        try:
+                top_line = urllib.request.urlopen(URL_version_history).read().decode('utf-8').split("\n")[0]
+                number_latest_version = int(top_line.split(":")[-1].split("(")[0])
+                string_latest_version = top_line.split("(")[1].split(")")[0]
+
+                flag_latest_version_checked = True
+                
+        except: # If unable to retrieve the latest version
+                
+                flag_latest_version_checked = False
+                if flag_ask_to_update == True:
+                        print("%sERROR%s: Could not retrieve the latest version of PULSAR_MINER from the web." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR))
+                        print("       Please check your internet connection and retry.")
+                        print()
+
+                elif flag_ask_to_update == False:
+                        pass
+
+                return (number_this_version, string_this_version)
+                
+        if flag_latest_version_checked == True:
+                if flag_ask_to_update == False:
+                        if number_latest_version > number_this_version:
+                                print("%sTIP: A new version (%s) of PULSAR_MINER is available (current version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_this_version, colors.ENDCOLOR))
+                                print("           Run 'pulsar_miner -update' to install the latest version.")
+                                print()
+                                
+
+                return (number_latest_version, string_latest_version)
+        else:
+                return (number_this_version, string_this_version)
+                        
+def update_pulsar_miner(dir_pulsar_miner, string_this_version, string_latest_version):
+        current_work_dir = os.getcwd()
+
+        # Back-up the current version
+        try:
+                import tarfile
+                parent_dir_pulsar_miner = "/".join(dir_pulsar_miner.split("/")[:-1])
+                tarred_file_abspath = os.path.join(parent_dir_pulsar_miner, "PULSAR_MINER_%s.tar" % (string_this_version))
+                tarred_file = tarfile.open(tarred_file_abspath,"w")
+                tarred_file.add(parent_dir_pulsar_miner)
+                tarred_file.close()
+                print("Old version of PULSAR_MINER backed up in %s." % tarred_file_abspath)
+                print()
+        except  Exception as error:
+                print(error)
+                print("%sWARNING%s: Could not backup your older version of PULSAR_MINER in a .tar file." % (colors.WARNING+colors.BOLD, colors.ENDCOLOR))
+                print("     Anyway, you can always go always use an older version of the pipeline using 'git checkout' to an older commit.")
+                print()
+
+        # Update to the latest version
+        try:
+                os.chdir(dir_pulsar_miner)
+                os.system("git pull")
+                os.chdir(current_work_dir)
+                print("PULSAR_MINER installation (%s) successfully updated to the latest version (%s)!" % (current_work_dir, string_latest_version) )
+                print()
+
+        except:
+                print("%sERROR%s: Could not update PULSAR_MINER..." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR))
+                print()
+    
 def check_presto_path(presto_path, key):
         if os.path.exists(presto_path):
                 if os.path.exists(presto_path+"/bin/accelsearch"):
@@ -2300,6 +2372,8 @@ def common_start_string(sa, sb):
 ###########################################################################################################################################################
 verbosity_level = 1
 obsname = ""
+flag_update_pulsar_miner = False
+dir_pulsar_miner = os.path.abspath( os.path.dirname( __file__ ) )
 
 # SHELL ARGUMENTS
 if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
@@ -2312,12 +2386,13 @@ if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--hel
         print("%10s  %-32s:  %-50s" % ("-v", "", "Verbose mode - print more useful info about the processing"))
         print("%10s  %-32s:  %-50s" % ("-V", "", "Very verbose mode - print everything to debug issues"))
         print("%10s  %-32s:  %-50s" % ("-version", "", "Print code version"))
+        print("%10s  %-32s:  %-50s" % ("-update", "", "Check for new versions and ask if want to update"))
         print()
         print("To create default configuration files: \033[1m%s -init_default [<observationfile>]\033[0m" % (os.path.basename(sys.argv[0])))
         print()
         exit()
 elif (("-version" in sys.argv) or ("--version" in sys.argv)):
-        print("PULSAR_MINER version: %s" % (string_version))
+        print("PULSAR_MINER version: %s" % (string_version_full))
         exit()
 else:
         for j in range(1, len(sys.argv)):
@@ -2336,18 +2411,32 @@ else:
                         verbosity_level = 2
                 elif (sys.argv[j] == "-V"):
                         verbosity_level = 3
-
+                elif (sys.argv[j] == "-update"):
+                        number_latest_version, string_latest_version = check_for_updates(number_version, string_version, flag_ask_to_update=True)
+                        if number_latest_version > number_version:
+                                print("%sA new version (%s) of PULSAR_MINER is available (your version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_version, colors.ENDCOLOR))
+                                string_answer = input("Proceed and install the new version? (y/n): ")
+                                if string_answer == "y" or string_answer == "Y":
+                                        update_pulsar_miner(dir_pulsar_miner, string_version, string_latest_version)
+                        elif  number_latest_version == number_version:
+                                print("%sGOOD NEWS!%s Your PULSAR_MINER is up-to-date! (current version: %s)." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, string_version))
+                               
+                        elif number_latest_version < number_version:
+                                print("Your PULSAR_MINER version (%s) is actually ahead of the online repo (%s)! :)" % (string_version, string_latest_version))
+                        print()
+                        exit()
+                        
 pipeline_start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 if verbosity_level >= 1:
         size_logo = 64
-        size_string_version = len(string_version)
+        size_string_version = len(string_version_full)
         dsize = int((size_logo - size_string_version)*0.5 - 1)
         dsize_offset = size_string_version % 2
 
         print()
         print("#"*size_logo)
         print("#" + " "*25 + "%s" % ("PULSAR MINER") + " "*25 + "#")
-        print("#" + " "*(dsize + dsize_offset) + "%s" % (string_version) + " "*dsize + "#")
+        print("#" + " "*(dsize + dsize_offset) + "%s" % (string_version_full) + " "*dsize + "#")
         print("#"*size_logo)
         print()
         print("Command: %s" % (" ".join(sys.argv)))
