@@ -32,7 +32,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version_full = "2.0-beta (10Nov2023)"
 string_version = "10Nov2023"
-number_version = 20231110
+number_version = 20231110.1
 
 class colors:
     HEADER = '\033[95m'
@@ -45,7 +45,7 @@ class colors:
     ENDCOLOR = '\033[0m'
 
 
-def check_for_updates(number_this_version, string_this_version, flag_ask_to_update=False):
+def check_for_updates(number_this_version, string_this_version, flag_verbose=False):
         URL_version_history="https://raw.githubusercontent.com/alex88ridolfi/PULSAR_MINER/master/VERSION_HISTORY"
         flag_can_update = False
 
@@ -53,33 +53,19 @@ def check_for_updates(number_this_version, string_this_version, flag_ask_to_upda
                 top_line = urllib.request.urlopen(URL_version_history).read().decode('utf-8').split("\n")[0]
                 number_latest_version = int(top_line.split(":")[-1].split("(")[0])
                 string_latest_version = top_line.split("(")[1].split(")")[0]
-
-                flag_latest_version_checked = True
                 
+                return (number_latest_version, string_latest_version)
+        
         except: # If unable to retrieve the latest version
                 
-                flag_latest_version_checked = False
-                if flag_ask_to_update == True:
+                if flag_verbose == True:
                         print("%sERROR%s: Could not retrieve the latest version of PULSAR_MINER from the web." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR))
                         print("       Please check your internet connection and retry.")
                         print()
 
-                elif flag_ask_to_update == False:
-                        pass
 
                 return (number_this_version, string_this_version)
-                
-        if flag_latest_version_checked == True:
-                if flag_ask_to_update == False:
-                        if number_latest_version > number_this_version:
-                                print("%sTIP: A new version (%s) of PULSAR_MINER is available (current version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_this_version, colors.ENDCOLOR))
-                                print("           Run 'pulsar_miner -update' to install the latest version.")
-                                print()
-                                
 
-                return (number_latest_version, string_latest_version)
-        else:
-                return (number_this_version, string_this_version)
                         
 def update_pulsar_miner(dir_pulsar_miner, string_this_version, string_latest_version):
         current_work_dir = os.getcwd()
@@ -2412,7 +2398,7 @@ else:
                 elif (sys.argv[j] == "-V"):
                         verbosity_level = 3
                 elif (sys.argv[j] == "-update"):
-                        number_latest_version, string_latest_version = check_for_updates(number_version, string_version, flag_ask_to_update=True)
+                        number_latest_version, string_latest_version = check_for_updates(number_version, string_version, flag_verbose=True)
                         if number_latest_version > number_version:
                                 print("%sA new version (%s) of PULSAR_MINER is available (your version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_version, colors.ENDCOLOR))
                                 string_answer = input("Proceed and install the new version? (y/n): ")
@@ -2442,6 +2428,14 @@ if verbosity_level >= 1:
         print("Command: %s" % (" ".join(sys.argv)))
         print("Launch date_time: %s" % (pipeline_start_datetime_str) )
         print()
+
+
+number_latest_version, string_latest_version = check_for_updates(number_version, string_version, flag_verbose=False)
+if number_latest_version > number_version:
+        print("%sTIP: A new version (%s) of PULSAR_MINER is available (current version: %s).%s" % (colors.OKBLUE+colors.BOLD, string_latest_version, string_version, colors.ENDCOLOR))
+        print("           Run 'pulsar_miner -update' to install the latest version.")
+        print()
+        time.sleep(5)
 
 config = SurveyConfiguration(config_filename, verbosity_level)
 
