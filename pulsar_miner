@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (10Nov2023)"
-string_version = "10Nov2023"
-number_version = 20231110.3
+string_version_full = "2.0-beta (14Nov2023)"
+string_version = "14Nov2023"
+number_version = 20231114
 
 class colors:
     HEADER = '\033[95m'
@@ -967,7 +967,7 @@ def jerksearch(infile, work_dir, log_abspath, jerksearch_ncpus, numharm=4, zmax=
                 print("END JERKSEARCH ---------------------------------------------------------------------- ")
 
 
-def split_into_chunks(list_datfiles_to_split, log_dir, LOG_basename,  work_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=0 ):
+def split_into_chunks(list_datfiles_to_split, log_dir, LOG_basename,  work_dir, segment_min, i_chunk, list_zmax, jerksearch_zmax, jerksearch_wmax, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=0 ):
         segment_length_s = segment_min * 60
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
 
@@ -978,41 +978,47 @@ def split_into_chunks(list_datfiles_to_split, log_dir, LOG_basename,  work_dir, 
                 inffile_name = datfile_name.replace(".dat", ".inf")
                 info_datfile = infodata.infodata(inffile_name)
 
-                t_samp_s = info_datfile.dt
+                DM_trial_was_searched = check_if_DM_trial_was_searched(datfile_name, list_zmax, jerksearch_zmax, jerksearch_wmax)
 
-                N_samp = info_datfile.N
-                T_obs_s = t_samp_s * N_samp
+                if DM_trial_was_searched == False:
+                        t_samp_s = info_datfile.dt
+                        N_samp = info_datfile.N
+                        T_obs_s = t_samp_s * N_samp
 
-                start_fraction = (i_chunk * segment_length_s)/T_obs_s
-                numout = make_even_number(int(segment_length_s / t_samp_s))
+                        start_fraction = (i_chunk * segment_length_s)/T_obs_s
+                        numout = make_even_number(int(segment_length_s / t_samp_s))
 
-                string_min = "%dm" % int(segment_min)
-                string_chunk = "ck%02d" % i_chunk
-                path_old = os.path.splitext(datfile_name)[0]
-                path_new = path_old.replace("full", string_min).replace("ck00", string_chunk)
+                        string_min = "%dm" % int(segment_min)
+                        string_chunk = "ck%02d" % i_chunk
+                        path_old = os.path.splitext(datfile_name)[0]
+                        path_new = path_old.replace("full", string_min).replace("ck00", string_chunk)
 
-                new_outfile_name = "%s" % (os.path.basename(path_new))
+                        new_outfile_name = "%s" % (os.path.basename(path_new))
 
-                cmd_prepdata_split = "prepdata -nobary -o %s/%s -start %.3f -numout %s %s" % (work_dir, new_outfile_name, start_fraction, numout,  datfile_name)
+                        cmd_prepdata_split = "prepdata -nobary -o %s/%s -start %.3f -numout %s %s" % (work_dir, new_outfile_name, start_fraction, numout,  datfile_name)
 
-                output_datfile = "%s/%s.dat" % (work_dir, new_outfile_name)
-                output_inffile = "%s/%s.inf" % (work_dir, new_outfile_name)
-                output_scriptfile = "%s/%s.dat.makecmd" % (work_dir, new_outfile_name)
+                        output_datfile = "%s/%s.dat" % (work_dir, new_outfile_name)
+                        output_inffile = "%s/%s.inf" % (work_dir, new_outfile_name)
+                        output_scriptfile = "%s/%s.dat.makecmd" % (work_dir, new_outfile_name)
 
-                if flag_remove_datfiles_of_segments == 1 and (not os.path.exists(output_scriptfile)):
-                        with open(output_scriptfile, 'w') as f:
-                                f.write("%s\n" % (cmd_prepdata_split))
-                        os.chmod(output_scriptfile, 0o775)
+                        if flag_remove_datfiles_of_segments == 1 and (not os.path.exists(output_scriptfile)):
+                                with open(output_scriptfile, 'w') as f:
+                                        f.write("%s\n" % (cmd_prepdata_split))
+                                os.chmod(output_scriptfile, 0o775)
 
-                if check_prepdata_outfiles(output_datfile.replace(".dat", "")) == False:
-                        if verbosity_level >= 1:        print("Making chunk '%s' of segment '%sm' from '%s'..." % (string_chunk, segment_min, datfile_name), end=''); sys.stdout.flush()
-                        execute_and_log(cmd_prepdata_split, work_dir, log_abspath, dict_env, flag_LOG_append)
-                        if verbosity_level >= 1:        print("done!")
+                        if check_prepdata_outfiles(output_datfile.replace(".dat", "")) == False:
+                                if verbosity_level >= 1:        print("Making chunk '%s' of segment '%sm' from '%s'..." % (string_chunk, segment_min, datfile_name), end=''); sys.stdout.flush()
+                                execute_and_log(cmd_prepdata_split, work_dir, log_abspath, dict_env, flag_LOG_append)
+                                if verbosity_level >= 1:        print("done!")
+                        else:
+                                if verbosity_level >= 1:
+                                        print("NOTE: '%s.dat' already exists. No need to create it again." % (new_outfile_name))
                 else:
                         if verbosity_level >= 1:
-                                print("NOTE: '%s.dat' already exists. No need to create it again." % (new_outfile_name))
+                                print("NOTE: '%s' was already searched. No need to create it again." % (datfile_name))
 
 
+                                
 def check_if_DM_trial_was_searched(dat_file, list_zmax, jerksearch_zmax, jerksearch_wmax):
         dat_file_nameonly = os.path.basename(dat_file)
         fft_file = dat_file.replace(".dat", ".fft")
@@ -1975,7 +1981,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
 
                         segment_min = np.float64(segment_label.replace("m", ""))
                         i_chunk = int(chunk_label.replace("ck", ""))
-                        split_into_chunks(list_datfiles_to_split, log_dir, LOG_basename, out_dir, segment_min, i_chunk, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=flag_remove_datfiles_of_segments)
+                        split_into_chunks(list_datfiles_to_split, log_dir, LOG_basename, out_dir, segment_min, i_chunk, list_zmax, jerksearch_zmax, jerksearch_wmax, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=flag_remove_datfiles_of_segments)
 
                 if verbosity_level >= 2:
                         print("dedisperse_rednoise_and_periodicity_search_FFT:: launching periodicity_search_FFT")
