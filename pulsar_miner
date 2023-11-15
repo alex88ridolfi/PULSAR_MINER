@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (14Nov2023)"
-string_version = "14Nov2023"
-number_version = 20231114
+string_version_full = "2.0-beta (15Nov2023)"
+string_version = "15Nov2023"
+number_version = 20231115
 
 class colors:
     HEADER = '\033[95m'
@@ -2528,12 +2528,6 @@ if verbosity_level >= 2:
 LOG_dir = os.path.join(config.root_workdir, "LOG")
 
 
-if verbosity_level >= 1:
-        print()
-        print()
-        print("*******************************************************************")
-        print("SEARCH SCHEME:")
-        print("*******************************************************************")
 for i in range(len(config.list_Observations)):
         if verbosity_level >= 1:
                 print()
@@ -2585,6 +2579,12 @@ for i in range(len(config.list_Observations)):
                         config.fast_buffer_dir = ""
                         #time.sleep(10)
 
+        if verbosity_level >= 1:
+                print()
+                print()
+                print("*******************************************************************")
+                print("SEARCH SCHEME:")
+                print("*******************************************************************")
 
         config.dict_search_structure[config.list_Observations[i].file_basename] = {}
         for s in config.list_segments:
