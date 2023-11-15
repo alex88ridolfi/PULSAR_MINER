@@ -1,5 +1,7 @@
 # PULSAR_MINER
 
+![PULSAR_MINER logo](http://alex88ridolfi.altervista.org/immagini/logo_pulsar_miner_small.png)
+    
 ___“Edit the configuration file, input your observation to search, and you are ready to go!”___
 
 
