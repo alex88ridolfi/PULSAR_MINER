@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (16Nov2023)"
-string_version = "16Nov2023"
-number_version = 20231116
+string_version_full = "2.0-beta (24Nov2023)"
+string_version = "24Nov2023"
+number_version = 20231124
 
 class colors:
     HEADER = '\033[95m'
@@ -2620,25 +2620,21 @@ for i in range(len(config.list_Observations)):
 
                 N_chunks = int(config.list_Observations[i].T_obs_s / segment_length_s)
                 fraction_left = (config.list_Observations[i].T_obs_s % segment_length_s) / segment_length_s
-
                 if fraction_left >= 0.80:
                         N_chunks = N_chunks + 1
-                        print(" --> %sWARNING:%s Last chunk of segment '%sm' is in fact a bit shorter (%.2f minutes)!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
-                        #time.sleep(5)
-
-                elif fraction_left > 0.10 and fraction_left < 0.80:
-                        print()
-                        print("--> %sWARNING:%s Last chunk of segment '%sm' is only %d minutes and will be ignored!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
-                        #time.sleep(5)
-                else:
-                        print()
-
 
                 for ck in range(N_chunks):
                         chunk_label = "ck%02d" % (ck)
                         config.dict_search_structure[config.list_Observations[i].file_basename][segment_label][chunk_label] = {'candidates': []}
 
                 print("    Segment: %8s     ---> %2d chunks (%s)" % (segment_label, N_chunks, ", ".join(sorted(config.dict_search_structure[config.list_Observations[i].file_basename][segment_label].keys()))), end=' ')
+
+                if fraction_left >= 0.80:
+                        print(" --> %sWARNING:%s Last chunk of segment '%sm' is in fact a bit shorter (%.2f minutes)!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, s, fraction_left*segment_length_min))
+                elif fraction_left > 0.10 and fraction_left < 0.80:
+                        print("--> %sWARNING:%s Last chunk (ck%02d) of segment '%sm' is only %d minutes and will be ignored!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, ck+1, s, fraction_left*segment_length_min))
+                else:
+                        print()
 
                 
 if verbosity_level >= 1:
