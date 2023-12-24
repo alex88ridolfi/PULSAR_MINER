@@ -40,11 +40,11 @@ if (len(sys.argv) == 1):
 else:
        for j in range(1, len(sys.argv)):
               if (sys.argv[j] == "-cand_ms"):
-                     list_P_cand_ms = np.array([np.float(x) for x in sys.argv[j+1].split(",")])
+                     list_P_cand_ms = np.array([np.float64(x) for x in sys.argv[j+1].split(",")])
                      print("list_P_cand_ms = ", list_P_cand_ms)
 
               if (sys.argv[j] == "-cand_Hz"):
-                     list_P_cand_ms = np.array([1000*(1./np.float(x)) for x in sys.argv[j+1].split(",")])
+                     list_P_cand_ms = np.array([1000*(1./np.float64(x)) for x in sys.argv[j+1].split(",")])
                      print("list_P_cand_ms = ", list_P_cand_ms)
 
                      

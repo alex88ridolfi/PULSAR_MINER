@@ -205,7 +205,7 @@ class Observation(object):
                                 self.freq_low_MHz = object_file.specinfo.lo_freq
                                 self.MJD_int = object_file.specinfo.mjd
                                 self.MJD_sec = object_file.specinfo.secs
-                                self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                                self.Tstart_MJD = self.MJD_int + np.float64(self.MJD_sec/86400.)
                                 self.nchan = object_file.specinfo.num_channels
                                 self.observer = object_file.specinfo.observer
                                 self.project = object_file.specinfo.project_id
@@ -219,23 +219,23 @@ class Observation(object):
 
                         else:
                                 print("Reading PSRFITS (header only)....")
-                                self.bw_MHz = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
-                                self.N_samples = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
-                                self.T_obs_s = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
+                                self.bw_MHz = np.float64(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
+                                self.N_samples = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
+                                self.T_obs_s = np.float64(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
                                 self.backend = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
                                 self.nbits = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
-                                self.chanbw_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
-                                self.t_samp_s = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
-                                self.freq_central_MHz = np.float(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
+                                self.chanbw_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
+                                self.t_samp_s = np.float64(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
+                                self.freq_central_MHz = np.float64(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
                                 self.receiver = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
-                                self.freq_high_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
-                                self.freq_low_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
+                                self.freq_high_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
+                                self.freq_low_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
                                 self.nchan = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
                                 self.MJD_int = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
                                 self.MJD_sec_int = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
-                                self.MJD_sec_frac = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
+                                self.MJD_sec_frac = np.float64(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
                                 self.MJD_sec = self.MJD_sec_int + self.MJD_sec_frac
-                                self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                                self.Tstart_MJD = self.MJD_int + np.float64(self.MJD_sec/86400.)
                                 self.RAJ_str = get_command_output("vap -n -c ra %s" % (file_name)).split()[-1]
                                 self.DECJ_str = get_command_output("vap -n -c dec %s" % (file_name)).split()[-1]
 
@@ -271,15 +271,15 @@ class Observation(object):
                                         print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information...")
 
                                         self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
-                                        self.t_samp_s         = np.float(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
-                                        self.T_obs_s          = np.float(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
+                                        self.t_samp_s         = np.float64(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
+                                        self.T_obs_s          = np.float64(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
                                         self.nbits            = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
                                         self.nchan            = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
-                                        self.chanbw_MHz       = np.fabs(np.float(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
+                                        self.chanbw_MHz       = np.fabs(np.float64(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
                                         self.bw_MHz = self.chanbw_MHz*self.nchan
                                         self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                        self.Tstart_MJD              = np.float(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
-                                        self.freq_high_MHz    = np.float(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
+                                        self.Tstart_MJD              = np.float64(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                        self.freq_high_MHz    = np.float64(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
                                         self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
                                         self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
                                         self.source_name      = get_command_output("header %s -source_name" % (self.file_abspath)).split()[-1]
@@ -323,10 +323,10 @@ for k in range(N_bestprof):
 
         dict_bestprof = import_bestprof(bestprof_filename)
         
-        bestprof_PEPOCH_bary = np.float(dict_bestprof['Epoch_bary (MJD)'])
-        bestprof_P0_bary_s = np.float(dict_bestprof['P_bary (ms)'])*1.0e-3
-        bestprof_P1_bary_ss = np.float(dict_bestprof["P'_bary (s/s)"])
-        bestprof_P2_bary_ss2 = np.float(dict_bestprof["P''_bary (s/s^2)"])
+        bestprof_PEPOCH_bary = np.float64(dict_bestprof['Epoch_bary (MJD)'])
+        bestprof_P0_bary_s = np.float64(dict_bestprof['P_bary (ms)'])*1.0e-3
+        bestprof_P1_bary_ss = np.float64(dict_bestprof["P'_bary (s/s)"])
+        bestprof_P2_bary_ss2 = np.float64(dict_bestprof["P''_bary (s/s^2)"])
 
         bestprof_F0_bary_Hz            = 1./bestprof_P0_bary_s
         bestprof_F1_bary_Hz_s = convert_Pdot_into_F1(bestprof_P0_bary_s, bestprof_P1_bary_ss)
@@ -336,13 +336,13 @@ for k in range(N_bestprof):
         bestprof_telescope_T1_id = convert_obs_name_to_T1_id(bestprof_telescope)
         bestprof_telescope_parfilecode = dict_obs_parfilecodes[bestprof_telescope_T1_id]
         try:
-                bestprof_DM = np.float(dict_bestprof['Best DM'])
+                bestprof_DM = np.float64(dict_bestprof['Best DM'])
         except:
-                bestprof_DM = np.float(input("DM not found. Please input its value here (pc cm-3): "))
+                bestprof_DM = np.float64(input("DM not found. Please input its value here (pc cm-3): "))
 
-        P_dot = np.float(dict_bestprof["P'_bary (s/s)"])
+        P_dot = np.float64(dict_bestprof["P'_bary (s/s)"])
         nsamples = int(dict_bestprof["Data Folded"])
-        T_sample = np.float((dict_bestprof["T_sample"]))
+        T_sample = np.float64((dict_bestprof["T_sample"]))
 
         chunk_length_s = nsamples*T_sample
 

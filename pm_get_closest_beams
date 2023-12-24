@@ -88,7 +88,7 @@ class Observation(object):
                             self.freq_low_MHz = object_file.specinfo.lo_freq
                             self.MJD_int = object_file.specinfo.mjd
                             self.MJD_sec = object_file.specinfo.secs
-                            self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                            self.Tstart_MJD = self.MJD_int + np.float64(self.MJD_sec/86400.)
                             self.nchan = object_file.specinfo.num_channels
                             self.observer = object_file.specinfo.observer
                             self.project = object_file.specinfo.project_id
@@ -102,23 +102,23 @@ class Observation(object):
 
                      else:
                             print("Reading PSRFITS (header only)....")
-                            self.bw_MHz = np.float(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
-                            self.N_samples = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
-                            self.T_obs_s = np.float(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
+                            self.bw_MHz = np.float64(get_command_output("vap -n -c bw %s" % (file_name)).split()[-1])
+                            self.N_samples = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Spectra").split("=")[-1])
+                            self.T_obs_s = np.float64(get_command_output("vap -n -c length %s" % (file_name)).split()[-1])
                             self.backend = get_command_output("vap -n -c backend %s" % (file_name)).split()[-1]
                             self.nbits = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
-                            self.chanbw_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
-                            self.t_samp_s = np.float(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
-                            self.freq_central_MHz = np.float(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
+                            self.chanbw_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
+                            self.t_samp_s = np.float64(get_command_output("vap -n -c tsamp %s" % (file_name)).split()[-1])
+                            self.freq_central_MHz = np.float64(get_command_output("vap -n -c freq %s" % (file_name)).split()[-1])
                             self.receiver = get_command_output("vap -n -c rcvr %s" % (file_name)).split()[-1]
-                            self.freq_high_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
-                            self.freq_low_MHz = np.float(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
+                            self.freq_high_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
+                            self.freq_low_MHz = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
                             self.nchan = int(get_command_output("vap -n -c nchan %s" % (file_name)).split()[-1])
                             self.MJD_int = int(get_command_output("psrstat -Q -c ext:stt_imjd %s" % (file_name)).split()[-1])
                             self.MJD_sec_int = int(get_command_output("psrstat -Q -c ext:stt_smjd %s" % (file_name)).split()[-1])
-                            self.MJD_sec_frac = np.float(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
+                            self.MJD_sec_frac = np.float64(get_command_output("psrstat -Q -c ext:stt_offs %s" % (file_name)).split()[-1])
                             self.MJD_sec = self.MJD_sec_int + self.MJD_sec_frac
-                            self.Tstart_MJD = self.MJD_int + np.float(self.MJD_sec/86400.)
+                            self.Tstart_MJD = self.MJD_int + np.float64(self.MJD_sec/86400.)
                             self.RAJ_str = get_command_output("vap -n -c ra %s" % (file_name)).split()[-1]
                             self.DECJ_str = get_command_output("vap -n -c dec %s" % (file_name)).split()[-1]
 
@@ -154,15 +154,15 @@ class Observation(object):
                                    print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information...")
 
                                    self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]))
-                                   self.t_samp_s         = np.float(get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
-                                   self.T_obs_s = np.float(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
+                                   self.t_samp_s         = np.float64(get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
+                                   self.T_obs_s = np.float64(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
                                    self.nbits = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
                                    self.nchan = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
-                                   self.chanbw_MHz = np.fabs(np.float(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
+                                   self.chanbw_MHz = np.fabs(np.float64(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
                                    self.bw_MHz = self.chanbw_MHz*self.nchan
                                    self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                   self.Tstart_MJD = np.float(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
-                                   self.freq_high_MHz = np.float(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
+                                   self.Tstart_MJD = np.float64(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                   self.freq_high_MHz = np.float64(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
                                    self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
                                    self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
 
@@ -195,7 +195,7 @@ else:
                      N_top_closest_beams = int(sys.argv[j+1])
                      
               elif (sys.argv[j] == "-max_dist_arcsec"):
-                     max_dist_arcsec = np.float(sys.argv[j+1])
+                     max_dist_arcsec = np.float64(sys.argv[j+1])
 
               elif (sys.argv[j] == "-make_rsync_script"):
                      flag_make_rsync_script = 1

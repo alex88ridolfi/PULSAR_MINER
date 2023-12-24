@@ -89,15 +89,15 @@ else:
 
               elif (sys.argv[j] == "-length_s"):
                      str_split_type = "split_length"
-                     chunk_length_s = np.float(sys.argv[j+1])
+                     chunk_length_s = np.float64(sys.argv[j+1])
                      
               elif (sys.argv[j] == "-start"):
                      str_split_type = "split_start_end"
-                     fraction_start = np.float(sys.argv[j+1])
+                     fraction_start = np.float64(sys.argv[j+1])
                      
               elif (sys.argv[j] == "-end"):
                      str_split_type = "split_start_end"
-                     fraction_end = np.float(sys.argv[j+1])
+                     fraction_end = np.float64(sys.argv[j+1])
 
 
 N_datfiles = len(list_datfiles)
@@ -134,7 +134,7 @@ for i in range(N_datfiles):
 
               if str_split_type == "split_nchunks":
                      chunk_fraction_size = 1./n_chunks
-                     numout_per_chunk = int(nsamples / np.float(n_chunks) )
+                     numout_per_chunk = int(nsamples / np.float64(n_chunks) )
                      if numout_per_chunk % 2 != 0:
                             numout_per_chunk = numout_per_chunk + 1
                      chunk_length_s = numout_per_chunk * tsamp_s
@@ -142,7 +142,7 @@ for i in range(N_datfiles):
                      
               elif str_split_type == "split_length":
                      n_chunks = int(obs_length_s / chunk_length_s)
-                     numout_per_chunk = int(chunk_length_s / np.float(tsamp_s))
+                     numout_per_chunk = int(chunk_length_s / np.float64(tsamp_s))
                      if numout_per_chunk % 2 != 0:
                             numout_per_chunk = numout_per_chunk + 1
 

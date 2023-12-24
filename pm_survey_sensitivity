@@ -18,8 +18,8 @@ def flux_with_radiometer_equation(SNR, beta, Tsys, G, npol, t_obs, bw, W_eff_s, 
         errors:  Errors for variables (SNR, Tsys, G)
        """
 
-       print("flux_with_radiometer_equation:: W_eff_s  = %.8f" % (W_eff_s))
-       print("flux_with_radiometer_equation:: P_s      = %.8f" % (P_s))
+       #print("flux_with_radiometer_equation:: W_eff_s  = %.8f" % (W_eff_s))
+       #print("flux_with_radiometer_equation:: P_s      = %.8f" % (P_s))
        
        if W_eff_s > P_s:
               W_eff_s = 0.999999999*P_s
@@ -36,7 +36,8 @@ def flux_with_radiometer_equation(SNR, beta, Tsys, G, npol, t_obs, bw, W_eff_s, 
        
        if flag_verbose_mode == True:
               # print "S_mean [mJy] = ( (%.2f * %.2f * %.2f K) / (%.1f K/Jy * sqrt( %d * %.1f s * %.2f MHz) ) )  * sqrt( %.2f * %.4f s / ( %.4f s - %.2f * %.4f s))  =  %.4f mJy" % (SNR, beta, Tsys, G, npol, t_obs, bw, W_frac, P_s, P_s , W_frac, P_s, S_mean_mJy)
-              print()
+              #print()
+              pass
 
        if errors != (0, 0, 0):
               delta_SNR = errors[0]
@@ -75,11 +76,11 @@ def calculate_effective_pulse_width_Weff_s(W_int_s, t_samp_s, DM_pccm3, DM_max_e
        Dt_wrong_DM = calculate_dispersion_delay_within_observing_band(fc_MHz, bw_MHz, DM_max_err_pccm_3)
        
        W_eff_s = np.sqrt(W_int_s**2 + Dt_scatter_s**2 + Dt_channel_dispersion_s**2 + t_samp_s**2)
-       print("calculate_effective_pulse_width_Weff_s:: W_int_s                   = %.8f" % (W_int_s))
-       print("calculate_effective_pulse_width_Weff_s:: Dt_scatter_s              = %.8f" % (Dt_scatter_s))
-       print("calculate_effective_pulse_width_Weff_s:: Dt_channel_dispersion_s   = %.8f" % (Dt_channel_dispersion_s))
-       print("calculate_effective_pulse_width_Weff_s:: t_samp_s                  = %.8f" % (t_samp_s))
-       print("calculate_effective_pulse_width_Weff_s:: ---> W_eff_s              = %.8f" % (W_eff_s))
+       #print("calculate_effective_pulse_width_Weff_s:: W_int_s                   = %.8f" % (W_int_s))
+       #print("calculate_effective_pulse_width_Weff_s:: Dt_scatter_s              = %.8f" % (Dt_scatter_s))
+       #print("calculate_effective_pulse_width_Weff_s:: Dt_channel_dispersion_s   = %.8f" % (Dt_channel_dispersion_s))
+       #print("calculate_effective_pulse_width_Weff_s:: t_samp_s                  = %.8f" % (t_samp_s))
+       #print("calculate_effective_pulse_width_Weff_s:: ---> W_eff_s              = %.8f" % (W_eff_s))
        
        return Dt_scatter_s, W_eff_s
 
@@ -163,30 +164,30 @@ elif (("-version" in sys.argv) or ("--version" in sys.argv)):
 else:
        for j in range(1, len(sys.argv)):
               if (sys.argv[j] == "-SNR"):
-                     SNR = np.float(sys.argv[j+1])
+                     SNR = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-beta"):
-                     beta = np.float(sys.argv[j+1])
+                     beta = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-Tsys"):
-                     Tsys_K = np.float(sys.argv[j+1])
+                     Tsys_K = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-G"):
-                     G_K_Jy = np.float(sys.argv[j+1])
+                     G_K_Jy = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-npol"):
-                     npol = np.float(sys.argv[j+1])
+                     npol = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-Tobs_s"):
-                     t_obs_s = np.float(sys.argv[j+1])
+                     t_obs_s = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-dt_s"):
-                     dt_s = np.float(sys.argv[j+1])
+                     dt_s = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-bw_MHz"):
-                     bw_MHz = np.float(sys.argv[j+1])
+                     bw_MHz = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-duty"):
-                     duty_frac = np.float(sys.argv[j+1])
+                     duty_frac = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-DM"):
-                     DM_pccm3 = np.float(sys.argv[j+1])
+                     DM_pccm3 = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-DM_step"):
-                     DM_step_pccm3 = np.float(sys.argv[j+1])
+                     DM_step_pccm3 = np.float64(sys.argv[j+1])
                      DM_max_err_pccm_3 = 0.5*DM_step_pccm3
               elif (sys.argv[j] == "-fc_MHz"):
-                     fc_MHz = np.float(sys.argv[j+1])
+                     fc_MHz = np.float64(sys.argv[j+1])
               elif (sys.argv[j] == "-nchan"):
                      nchan = int(sys.argv[j+1])
               elif (sys.argv[j] == "-ignore_scattering"):
@@ -195,13 +196,13 @@ else:
                      flag_coherent_dedispersion = 1
                      
               elif (sys.argv[j] == "-P_range_s"):
-                     P_min_s_exponent, P_max_s_exponent = [np.log10(np.float(x)) for x in sys.argv[j+1].split(",")]
+                     P_min_s_exponent, P_max_s_exponent = [np.log10(np.float64(x)) for x in sys.argv[j+1].split(",")]
               elif (sys.argv[j] == "-o"):
                      outfile_name = sys.argv[j+1]
                      
                      
 #array_P_s = np.linspace(P_min_s, P_max_s, 100.)
-array_P_s = np.logspace(P_min_s_exponent, P_max_s_exponent, 100.)
+array_P_s = np.logspace(P_min_s_exponent, P_max_s_exponent, 100)
 print()
 print("Survey parameters:")
 print()
@@ -243,8 +244,8 @@ for n in range(len(array_P_s)-1, 0, -1):
        # print "W_eff_s = %.2f" % W_eff_s
        
        S_mean_min_mJy = flux_with_radiometer_equation( SNR, beta, Tsys_K, G_K_Jy, npol, t_obs_s, bw_MHz, W_eff_s, P_s, flag_verbose_mode=False, errors=(0, 0,0) )
-       print("S_mean_min_mJy = ", S_mean_min_mJy)
-       print()
+       #print("S_mean_min_mJy = ", S_mean_min_mJy)
+       #print()
        
        string_values = "%20.7f %20.6f %20.3f %23.7f %23.7f %23.7f" % (P_s, S_mean_min_mJy, duty_frac, W_int_s, Dt_scattering_s, W_eff_s)
        # print string_values

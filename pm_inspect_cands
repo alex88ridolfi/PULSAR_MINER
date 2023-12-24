@@ -104,8 +104,8 @@ def check_if_already_known(P_cand_ms, list_known_periods, list_doppler_factors, 
                         for nh in range(1, numharm + 1):
                                 for n in range(1, 16+1):
                                         # print "nh = %d   | n = %d" % (nh, n)
-                                        P_known_ms_nh_min = P_ms_min * (np.float(n) / nh)
-                                        P_known_ms_nh_max = P_ms_max * (np.float(n) / nh)
+                                        P_known_ms_nh_min = P_ms_min * (np.float64(n) / nh)
+                                        P_known_ms_nh_max = P_ms_max * (np.float64(n) / nh)
                                         
                                         # print "nh = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f " % (nh, n, psrname, P, P_known_ms_nh_min, P_known_ms_nh_max)
                                         
@@ -118,8 +118,8 @@ def check_if_already_known(P_cand_ms, list_known_periods, list_doppler_factors, 
                         # print "----------------- SUBHARMONICS ----"
                         for ns in range(2, numharm + 1):
                                 for n in range(1, 16+1):
-                                        P_known_ms_ns_min = P_ms_min * (np.float(ns) / n)
-                                        P_known_ms_ns_max = P_ms_max * (np.float(ns) / n)
+                                        P_known_ms_ns_min = P_ms_min * (np.float64(ns) / n)
+                                        P_known_ms_ns_max = P_ms_max * (np.float64(ns) / n)
                                         # print "ns = %d/%d  --> Pulsar %s (P=%.10f) has a period = %.10f - %.10f " % (n,ns, psrname, P, P_known_ms_ns_min, P_known_ms_ns_max)
                                         
                                         if (P_cand_ms >= P_known_ms_ns_min) and (P_cand_ms <= P_known_ms_ns_max):
@@ -170,7 +170,7 @@ else:
                 elif (sys.argv[j] == "-flag_redetections"):
                         flag_flag_redetections = 1
                 elif (sys.argv[j] == "-DM_range"):
-                        DM_range = [np.float(x) for x in sys.argv[j+1].strip().split(",")]
+                        DM_range = [np.float64(x) for x in sys.argv[j+1].strip().split(",")]
 
 
 N_parfiles = len(list_parfiles)
@@ -271,8 +271,8 @@ for k in range(N_bestprof):
         }
         dict_bestprof['bestprof_filename'] = bestprof_filename
 
-        if np.float(dict_bestprof['best_DM']) < DM_range[0] or np.float(dict_bestprof['best_DM']) > DM_range[1]:
-                print("%s  has best DM = %.2f, outside the target range [%.2f - %.2f]. Ignoring..." % (bestprof_filename, np.float(dict_bestprof['best_DM']), DM_range[0], DM_range[1]))
+        if np.float64(dict_bestprof['best_DM']) < DM_range[0] or np.float64(dict_bestprof['best_DM']) > DM_range[1]:
+                print("%s  has best DM = %.2f, outside the target range [%.2f - %.2f]. Ignoring..." % (bestprof_filename, np.float64(dict_bestprof['best_DM']), DM_range[0], DM_range[1]))
                 wrong_DM_candidates = wrong_DM_candidates + 1
         else:
                 list_dict_candidates.append(dict_bestprof)
@@ -298,8 +298,8 @@ while j < N_candidates:
 
         print("________________________________________________")
 
-        P_cand_ms = np.float(dict_bestprof['P_bary_ms'])
-        DM_best_cand = np.float(dict_bestprof['best_DM'])
+        P_cand_ms = np.float64(dict_bestprof['P_bary_ms'])
+        DM_best_cand = np.float64(dict_bestprof['best_DM'])
 
         cand_basename = os.path.splitext(current_cand)[0]
         if cand_basename.startswith("GOOD_"):

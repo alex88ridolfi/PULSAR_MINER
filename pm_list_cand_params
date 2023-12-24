@@ -62,15 +62,15 @@ for k in range(N_bestprof):
        bestprof_filename = list_bestprof[k]
        dict_bestprof = import_bestprof(bestprof_filename)
 
-       P_bary_ms = np.float(dict_bestprof['P_bary (ms)'])
-       P_dot = np.float(dict_bestprof["P'_bary (s/s)"].split("+/-")[0])
+       P_bary_ms = np.float64(dict_bestprof['P_bary (ms)'])
+       P_dot = np.float64(dict_bestprof["P'_bary (s/s)"].split("+/-")[0])
        nsamples = int(dict_bestprof["Data Folded"])
-       T_sample = np.float((dict_bestprof["T_sample"]))
-       Epoch_bary = np.float((dict_bestprof["Epoch_bary (MJD)"]))
+       T_sample = np.float64((dict_bestprof["T_sample"]))
+       Epoch_bary = np.float64((dict_bestprof["Epoch_bary (MJD)"]))
        
        chunk_length_s = nsamples*T_sample
        try:
-              DM = np.float(dict_bestprof['Best DM'])
+              DM = np.float64(dict_bestprof['Best DM'])
        except:
               DM = -1
 
