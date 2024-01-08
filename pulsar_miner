@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (24Nov2023)"
-string_version = "24Nov2023"
-number_version = 20231124
+string_version_full = "2.0-beta (08Jan2024)"
+string_version = "08Jan2024"
+number_version = 20240108
 
 class colors:
     HEADER = '\033[95m'
@@ -1078,11 +1078,11 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
         i_seg, N_seg, i_ck, N_ck = list_seg_ck_indices
 
         if verbosity_level >= 2:
-                print("periodicity_search_FFT:: Files to search: ", "%s/*DM*.*.dat, excluding red" % (work_dir))
+                print("periodicity_search_FFT:: Files to search: ", "%s/*DM*.*.dat" % (work_dir))
                 print("periodicity_search_FFT:: presto_env_zmax_0 = ", presto_env_zmax_0)
                 print("periodicity_search_FFT:: presto_env_zmax_any = ", presto_env_zmax_any)
 
-        list_files_to_search = sorted([x for x in glob.glob("%s/*DM*.*.dat" % (work_dir)) if not "red" in x ])
+        list_files_to_search = sorted([x for x in glob.glob("%s/*DM*.*.dat" % (work_dir)) ])
 
         N_DMs_to_search = 0
         for k in range(len(list_DD_scheme)):
