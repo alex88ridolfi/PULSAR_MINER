@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (08Jan2024)"
-string_version = "08Jan2024"
-number_version = 20240108
+string_version_full = "2.0-beta (22Jan2024)"
+string_version = "22Jan2024"
+number_version = 20240122
 
 class colors:
     HEADER = '\033[95m'
@@ -395,22 +395,38 @@ class Observation(object):
 
                         except ValueError:
                                 if verbosity_level >= 1:
-                                        print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using 'header' to get the necessary information...")
+                                        print("WARNING: I got a Value Error! Likely your filterbank data is not 8-,16- or 32-bit. Using PRESTO's 'readfile' to get the necessary information...")
 
-                                self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
-                                self.t_samp_s         = np.float64(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
-                                self.T_obs_s          = np.float64(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
-                                self.nbits            = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
-                                self.nchan            = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
-                                self.chanbw_MHz       = np.fabs(np.float64(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
-                                self.bw_MHz = self.chanbw_MHz*self.nchan
-                                self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
-                                self.Tstart_MJD              = np.float64(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
-                                self.freq_high_MHz    = np.float64(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
-                                self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
-                                self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
-
-                                print(self.N_samples, self.t_samp_s, self.T_obs_s, self.nbits, self.nchan, self.chanbw_MHz, self.bw_MHz, self.backend, self.Tstart_MJD, self.freq_high_MHz, self.freq_central_MHz, self.freq_low_MHz)
+                                try:
+                                        self.N_samples        = np.float64(get_command_output_with_pipe("readfile %s" % (self.file_abspath), "grep Spectra").split("=")[-1])                                        
+                                        self.t_samp_s         = 1.0e-6*int(get_command_output_with_pipe("readfile %s" % (file_name), "grep Sample").split("=")[-1])
+                                        self.T_obs_s          = self.N_samples*self.t_samp_s
+                                        self.nbits            = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep bits").split("=")[-1])
+                                        self.nchan            = int(get_command_output_with_pipe("readfile %s" % (file_name), "grep channels").split("=")[-1])
+                                        self.chanbw_MHz       = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Channel").split("=")[-1])
+                                        self.bw_MHz = self.chanbw_MHz*self.nchan                                        
+                                        self.Tstart_MJD       = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep MJD").split("=")[-1])
+                                        self.freq_high_MHz    = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep High").split("=")[-1])
+                                        self.freq_low_MHz     = np.float64(get_command_output_with_pipe("readfile %s" % (file_name), "grep Low").split("=")[-1])
+                                        self.freq_central_MHz = (self.freq_high_MHz + self.freq_low_MHz)/2.0
+                                        print(self.N_samples, self.t_samp_s, self.T_obs_s, self.nbits, self.nchan, self.chanbw_MHz, self.bw_MHz, self.Tstart_MJD, self.freq_high_MHz, self.freq_central_MHz, self.freq_low_MHz)
+                                except:
+                                        print("WARNING: 'readfile' failed. Trying to use 'header' to get the necessary information...")
+                                        
+                                        self.N_samples        = np.abs(int(get_command_output("header %s -nsamples" % (self.file_abspath)).split()[-1]  ))
+                                        self.t_samp_s         = np.float64(      get_command_output("header %s -tsamp"    % (self.file_abspath)).split()[-1]) * 1.0e-6
+                                        self.T_obs_s          = np.float64(get_command_output("header %s -tobs"     % (self.file_abspath)).split()[-1])
+                                        self.nbits            = int(get_command_output("header %s -nbits"    % (self.file_abspath)).split()[-1])
+                                        self.nchan            = int(get_command_output("header %s -nchans"   % (self.file_abspath)).split()[-1])
+                                        self.chanbw_MHz       = np.fabs(np.float64(get_command_output("header %s -foff"     % (self.file_abspath)).split()[-1]))
+                                        self.bw_MHz = self.chanbw_MHz*self.nchan
+                                        self.backend = get_command_output("header %s -machine" % (self.file_abspath)).split()[-1]
+                                        self.Tstart_MJD              = np.float64(get_command_output("header %s -tstart"   % (self.file_abspath)).split()[-1])
+                                        self.freq_high_MHz    = np.float64(get_command_output("header %s -fch1"     % (self.file_abspath)).split()[-1]) + 0.5*self.chanbw_MHz
+                                        self.freq_central_MHz = self.freq_high_MHz - 0.5*self.bw_MHz
+                                        self.freq_low_MHz = self.freq_high_MHz - self.bw_MHz
+                                        
+                                        print(self.N_samples, self.t_samp_s, self.T_obs_s, self.nbits, self.nchan, self.chanbw_MHz, self.bw_MHz, self.backend, self.Tstart_MJD, self.freq_high_MHz, self.freq_central_MHz, self.freq_low_MHz)
 
 
                 if data_type =="psrfits":
