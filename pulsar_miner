@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (22Jan2024)"
-string_version = "22Jan2024"
-number_version = 20240122
+string_version_full = "2.0-beta (27Jan2024)"
+string_version = "27Jan2024"
+number_version = 20240127
 
 class colors:
     HEADER = '\033[95m'
@@ -672,7 +672,7 @@ def sift_candidates(work_dir, log_dir, LOG_basename,  dedispersion_dir, observat
         return candidates
 
 
-def fold_candidate(work_dir, log_dir, LOG_basename, observation, dir_dedispersion, obs, seg, ck, candidate, ignorechan_list, other_flags_prepfold="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, what_fold="rawdata", num_simultaneous_folds=1):
+def fold_candidate(work_dir, log_dir, LOG_basename, observation, dir_dedispersion, obs, seg, ck, candidate, ignorechan_list, other_flags_prepfold="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, what_fold="rawdata", num_simultaneous_prepfolds=1):
         log_abspath = "%s/LOG_%s.txt" % (log_dir, LOG_basename)
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
         cand = candidate
@@ -939,13 +939,12 @@ def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags=""
                 print("END ACCELSEARCH ---------------------------------------------------------------------- ")
 
 
-def jerksearch(infile, work_dir, log_abspath, jerksearch_ncpus, numharm=4, zmax=50, wmax=150, other_flags="", dict_env={}, verbosity_level=0, flag_LOG_append=1):
+def jerksearch(infile, work_dir, log_abspath, numharm=4, zmax=50, wmax=150, other_flags="", dict_env={}, verbosity_level=0, flag_LOG_append=1):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         inffile_empty = infile.replace(".fft", "_ACCEL_%d_JERK_%d_empty" % (zmax, wmax))
-        # print "type(jerksearch_ncpus, zmax, wmax, numharm,) ,", type(jerksearch_ncpus), type(zmax), type(wmax), type(numharm)
         sys.stdout.flush()
-        cmd_jerksearch = "accelsearch %s -ncpus %d -zmax %d -wmax %d -numharm %d %s" % (other_flags, jerksearch_ncpus, zmax, wmax, numharm, infile)
+        cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (other_flags, zmax, wmax, numharm, infile)
 
         if verbosity_level >= 2:
                 print()
@@ -1089,7 +1088,7 @@ def check_if_DM_trial_was_searched(dat_file, list_zmax, jerksearch_zmax, jerksea
         return True
 
 
-def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, list_DD_scheme, flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, jerksearch_ncpus=1, num_simultaneous_jerksearches=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse': 1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, list_DD_scheme, flag_use_cuda=0, list_cuda_ids=[0], flag_acceleration_search=1, numharm=8, list_zmax=[20], flag_jerk_search=1, jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, num_simultaneous_jerksearches=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse': 1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
 
         i_seg, N_seg, i_ck, N_ck = list_seg_ck_indices
 
@@ -1133,7 +1132,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
         #########################################################################################################
         #                                     NON-PARALLELIZED JERK SEARCH
         #########################################################################################################
-        if num_simultaneous_jerksearches == 1 or jerksearch_wmax == 0:
+        if num_simultaneous_jerksearches == 1 or jerksearch_wmax == 0 or flag_jerk_search == 0:
                 for i in range(N_files_to_search):
                         print()
                         if verbosity_level >= 2:
@@ -1183,53 +1182,54 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
 
                         if dict_flag_steps['flag_step_periodicity_search'] == 1:
                                 if DM_trial_was_searched == False:
-                                        for z in list_zmax:
-                                                tstart_accelsearch = time.time()
-                                                print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, z), end=' ')
-                                                sys.stdout.flush()
-                                                if int(z) == 0:
-                                                        dict_env = copy.deepcopy(dict_env_zmax_0)
-                                                        if verbosity_level >= 2:
-                                                                print("accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env))
-                                                        flag_cuda = ""
-                                                else:
-                                                        if flag_use_cuda == 1:
-                                                                dict_env = copy.deepcopy(dict_env_zmax_any)
-                                                                gpu_id = random.choice(list_cuda_ids)
-                                                                flag_cuda = " -cuda %d " % (gpu_id)
-                                                        else:
+                                        if flag_acceleration_search == 1:
+                                                for z in list_zmax:
+                                                        tstart_accelsearch = time.time()
+                                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, z), end=' ')
+                                                        sys.stdout.flush()
+                                                        if int(z) == 0:
                                                                 dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                                if verbosity_level >= 2:
+                                                                        print("accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env))
                                                                 flag_cuda = ""
+                                                        else:
+                                                                if flag_use_cuda == 1:
+                                                                        dict_env = copy.deepcopy(dict_env_zmax_any)
+                                                                        gpu_id = random.choice(list_cuda_ids)
+                                                                        flag_cuda = " -cuda %d " % (gpu_id)
+                                                                else:
+                                                                        dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                                        flag_cuda = ""
 
-                                                        if verbosity_level >= 2:
-                                                                print("periodicity_search_FFT:: zmax == %d ----> dict_env = %s" % (int(z), dict_env))
-                                                                print("periodicity_search_FFT:: Now check CUDA: list_cuda_ids = ", list_cuda_ids)
-                                                                print("periodicity_search_FFT:: flag_use_cuda = ", flag_use_cuda)
-                                                                print("periodicity_search_FFT:: flag_cuda = ", flag_cuda)
+                                                                if verbosity_level >= 2:
+                                                                        print("periodicity_search_FFT:: zmax == %d ----> dict_env = %s" % (int(z), dict_env))
+                                                                        print("periodicity_search_FFT:: Now check CUDA: list_cuda_ids = ", list_cuda_ids)
+                                                                        print("periodicity_search_FFT:: flag_use_cuda = ", flag_use_cuda)
+                                                                        print("periodicity_search_FFT:: flag_cuda = ", flag_cuda)
 
-                                                accelsearch_flags = other_flags_accelsearch + flag_cuda  # + " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
+                                                        accelsearch_flags = other_flags_accelsearch + flag_cuda  # + " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
 
-                                                accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
-                                                tend_accelsearch = time.time()
-                                                time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
-                                                print("done in %.2f s!" % (time_taken_accelsearch_s))
-                                                sys.stdout.flush()
-                                                ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
+                                                        accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                                        tend_accelsearch = time.time()
+                                                        time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
+                                                        print("done in %.2f s!" % (time_taken_accelsearch_s))
+                                                        sys.stdout.flush()
+                                                        ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
 
-                                        if jerksearch_wmax > 0:
+                                        if jerksearch_wmax > 0 and flag_jerk_search == 1:
                                                 tstart_jerksearch = time.time()
                                                 print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
                                                 sys.stdout.flush()
                                                 flag_cuda = ""
                                                 jerksearch_flags = other_flags_accelsearch + flag_cuda
-                                                jerksearch(fft_file, work_dir, log_abspath, jerksearch_ncpus=jerksearch_ncpus, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                                jerksearch(fft_file, work_dir, log_abspath, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
                                                 tend_jerksearch = time.time()
                                                 time_taken_jerksearch_s = tend_jerksearch - tstart_jerksearch
                                                 print("done in %.2f s!" % (time_taken_jerksearch_s))
                                                 sys.stdout.flush()
                                                 ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s_JERK_%s" % (jerksearch_zmax, jerksearch_wmax))
 
-                                else:
+                                else:   
                                         print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, dat_file_nameonly), end=' '); sys.stdout.flush()
 
 
@@ -1247,7 +1247,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
         # We will first realfft, deredden and zap all the dat files, then search all the .fft files in parallel
         #########################################################################################################
         
-        elif num_simultaneous_jerksearches >= 2 and jerksearch_wmax > 0:
+        elif num_simultaneous_jerksearches >= 2 and jerksearch_wmax > 0 and flag_jerk_search == 1:
                 list_jerksearch_commands = []
                 list_jerksearch_workdirs = []
                 jerksearch_flags = other_flags_accelsearch
@@ -1294,6 +1294,8 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                                         zapped_fft_nameonly = os.path.basename(zapped_fft_filename)
                                         print("done!")
                                         sys.stdout.flush()
+                                else:
+                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Already fully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search), end=' ')
                         else:
                                 print("STEP_REALFFT = 0, skipping realfft, rednoise, zapbirds...")
 
@@ -1332,7 +1334,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                                                 ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
 
                                         print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Will do jerk search of %s with zmax=%d, wmax=%d, numharm=%d at the end of the acceleration search of this chunk..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
-                                        cmd_jerksearch = "accelsearch %s -ncpus %s -zmax %d -wmax %d -numharm %d %s" % (jerksearch_flags, jerksearch_ncpus, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, fft_file)
+                                        cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (jerksearch_flags, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, fft_file)
                                         list_jerksearch_commands.append(cmd_jerksearch)
                                         list_jerksearch_workdirs.append(work_dir)
                                         print()
@@ -1347,6 +1349,8 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                         print("Queing jerk search command #%d: '%s'" % (k+1, list_jerksearch_commands[k]))
                         time.sleep(0.1)
                         TP.apply_async(execute_and_log_in_thread_pool, (list_jerksearch_commands[k], log_dir, list_jerksearch_workdirs[k], k, N_commands, 1) )
+                print("\n")
+                print("Running %d jerk search commands at once..." % (num_simultaneous_jerksearches)); sys.stdout.flush()
                 TP.close()
                 TP.join()
                 print()
@@ -1641,7 +1645,7 @@ def prepdata(infile, out_dir, log_dir, LOG_basename, DM, Nsamples=0, ignorechan_
                         sys.stdout.flush()
 
 
-def make_rfifind_mask(infile, out_dir, log_dir, LOG_basename, time=2.0, freqsig=6.0, timesig=10.0, intfrac=0.3, chanfrac=0.7, time_intervals_to_zap="", chans_to_zap="", other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
+def make_rfifind_mask(infile, out_dir, log_dir, LOG_basename, time=2.0, time_intervals_to_zap="", chans_to_zap="", other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
 
@@ -1654,7 +1658,7 @@ def make_rfifind_mask(infile, out_dir, log_dir, LOG_basename, time=2.0, freqsig=
         if chans_to_zap != "":
                 flag_zapchan = "-zapchan %s" %  (chans_to_zap)
 
-        cmd_rfifind = "rfifind %s -o %s -time %s -freqsig %s -timesig %s -intfrac %s -chanfrac %s %s %s %s" % (other_flags, infile_basename, time, freqsig, timesig, intfrac, chanfrac, flag_zapints, flag_zapchan, infile)
+        cmd_rfifind = "rfifind %s -o %s -time %s %s %s %s" % (other_flags, infile_basename, time, flag_zapints, flag_zapchan, infile)
         if verbosity_level >= 2:
                 print("%s | Running:" % (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M"))
                 sys.stdout.flush()
@@ -1802,7 +1806,7 @@ def get_DDplan_scheme(infile, out_dir, log_dir, LOG_basename, loDM, highDM, DM_c
         return list_DD_schemes
 
 
-def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, nsubbands=0, max_simultaneous_prepsubbands=1, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
+def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, nsubbands=0, num_simultaneous_prepsubbands=1, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         prepsubband_outfilename = "%s_%s_%s" % (infile_basename, segment_label, chunk_label)
@@ -1853,9 +1857,9 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
         if verbosity_level >= 1:
                 print("Dedispersing with %d subbands (original number of channels: %d)" % (nsubbands, nchan))
                 print()
-                if config.max_simultaneous_prepsubbands == 1:
+                if config.num_simultaneous_prepsubbands == 1:
                         print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mtail -f %s\033[0m'" % (log_abspath))
-                elif config.max_simultaneous_prepsubbands > 1:
+                elif config.num_simultaneous_prepsubbands > 1:
                         print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mfor f in %s/LOG_prepsubband_*.txt; do tail -1 ${f}; echo; done\033[0m'" % (LOG_dir))
                 print()
 
@@ -1881,7 +1885,7 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                                 cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
 
                         if check_prepsubband_result_single_scheme(out_dir, list_DD_schemes[i], verbosity_level) == False:
-                                if max_simultaneous_prepsubbands == 1 or N_schemes == 1:
+                                if num_simultaneous_prepsubbands == 1 or N_schemes == 1:
                                         if verbosity_level >= 1:
                                                 print("Running  prepsubband for DM range [%.3f-%.3f%s pc cm-3 (scheme %d/%d) on observation '%s'..." % (loDM, hiDM, str_parentesis, i+1, N_schemes, infile), end=' '); sys.stdout.flush()
                                         if verbosity_level >= 2:
@@ -1894,7 +1898,7 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                                         if verbosity_level >= 1:
                                                 print("done!"); sys.stdout.flush()
 
-                                elif max_simultaneous_prepsubbands > 1 and N_schemes > 1:
+                                elif num_simultaneous_prepsubbands > 1 and N_schemes > 1:
                                         list_prepsubband_commands.append(cmd_prepsubband)
                                         list_prepsubband_workdirs.append(out_dir)
                                         #print("list_prepsubband_commands = %s", list_prepsubband_commands)
@@ -1905,11 +1909,11 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                                 print("WARNING: prepsubband for DM range [%.3f-%.3f%s pc cm-3 (scheme %d/%d) on observation '%s' already successfully run. Skipping..." % (list_DD_schemes[i]['loDM'], hiDM, str_parentesis, i+1, N_schemes, infile))
                                 N_prepsubband_schemes_done = N_prepsubband_schemes_done + 1
 
-        if max_simultaneous_prepsubbands > 1 and N_schemes > 1:
-                TP = ThreadPool(max_simultaneous_prepsubbands)
+        if num_simultaneous_prepsubbands > 1 and N_schemes > 1:
+                TP = ThreadPool(num_simultaneous_prepsubbands)
                 N_commands = len(list_prepsubband_commands)
                 print()
-                print("Total of %d prepsubband commands, running %d of them at once..." % (N_commands, max_simultaneous_prepsubbands));  sys.stdout.flush()
+                print("Total of %d prepsubband commands, running %d of them at once..." % (N_commands, num_simultaneous_prepsubbands));  sys.stdout.flush()
                 print()
                 for k in range(len(list_prepsubband_commands)):
                         print("Queing prepsubband command #%d: '%s'" % (k+1, list_prepsubband_commands[k]))
@@ -1990,7 +1994,7 @@ def zapbirds(fft_infile, zapfile_name, work_dir, log_dir, LOG_basename, presto_e
         return zapped_fft_filename, zapped_inf_filename
 
 
-def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, log_dir, LOG_basename, flag_search_full, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, max_simultaneous_prepsubbands=1, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], numharm=8, list_zmax=[20], jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, jerksearch_ncpus=1, num_simultaneous_jerksearches=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse': 1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
+def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir, log_dir, LOG_basename, flag_search_full, segment_label, chunk_label, list_seg_ck_indices, zapfile, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands=0, num_simultaneous_prepsubbands=1, other_flags_prepsubband="", presto_env_prepsubband=os.environ['PRESTO'], flag_use_cuda=0, list_cuda_ids=[0], flag_acceleration_search=1, numharm=8, list_zmax=[20], flag_jerk_search=0, jerksearch_zmax=10, jerksearch_wmax=30, jerksearch_numharm=4, num_simultaneous_jerksearches=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_accelsearch_zmax_0=os.environ['PRESTO'], presto_env_accelsearch_zmax_any=os.environ['PRESTO'], verbosity_level=0, dict_flag_steps = {'flag_step_dedisperse': 1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
 
@@ -2002,7 +2006,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
 
         if dict_flag_steps['flag_step_dedisperse'] == 1:
                 if segment_label == "full":
-                        dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands, max_simultaneous_prepsubbands, other_flags_prepsubband, presto_env_prepsubband, verbosity_level)
+                        dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands, num_simultaneous_prepsubbands, other_flags_prepsubband, presto_env_prepsubband, verbosity_level)
                 else:
 
                         search_string = "%s/03_DEDISPERSION/%s/full/ck00/*.dat" % (root_workdir, infile_basename) #List of datfiles to split
@@ -2027,7 +2031,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
                         print("dedisperse_rednoise_and_periodicity_search_FFT:: STEP_DEDISPERSE = 0, skipping prepsubband...")
 
         if not (segment_label == "full" and flag_search_full == 0):
-                periodicity_search_FFT(out_dir, log_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, list_DD_schemes, flag_use_cuda, list_cuda_ids, numharm, list_zmax, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, jerksearch_ncpus, num_simultaneous_jerksearches, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfiles, flag_remove_datfiles_of_segments, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
+                periodicity_search_FFT(out_dir, log_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, list_DD_schemes, flag_use_cuda, list_cuda_ids, flag_acceleration_search, numharm, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, num_simultaneous_jerksearches, period_to_search_min_s, period_to_search_max_s, other_flags_accelsearch, flag_remove_fftfiles, flag_remove_datfiles_of_segments, presto_env_accelsearch_zmax_0, presto_env_accelsearch_zmax_any, verbosity_level, 1, dict_flag_steps)
 
 
 class SurveyConfiguration(object):
@@ -2035,7 +2039,7 @@ class SurveyConfiguration(object):
                 self.config_filename = config_filename
                 self.list_datafiles = []
 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'ROOT_WORKDIR', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR', 'DATA_TYPE', 'PRESTO', 'PRESTO_GPU', 'USE_CUDA', 'CUDA_IDS', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'JERKSEARCH_NCPUS', 'NUM_SIMULTANEOUS_JERKSEARCHES', 'RFIFIND_TIME', 'RFIFIND_FREQSIG', 'RFIFIND_TIMESIG', 'RFIFIND_INTFRAC', 'RFIFIND_CHANFRAC', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'PREPFOLD_FLAGS', 'MAX_SIMULTANEOUS_PREPSUBBANDS', 'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'NUM_SIMULTANEOUS_FOLDS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'DATA_TYPE', 'ROOT_WORKDIR', 'PRESTO', 'PRESTO_GPU', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'RFIFIND_TIME', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'ZAP_ISOLATED_PULSARS_FROM_FFTS', 'ZAP_ISOLATED_PULSARS_MAX_HARM', 'FLAG_ACCELERATION_SEARCH', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'FLAG_JERK_SEARCH', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'ACCELSEARCH_JERK_FLAGS', 'PREPFOLD_FLAGS', 'USE_CUDA', 'CUDA_IDS', 'NUM_SIMULTANEOUS_JERKSEARCHES', 'NUM_SIMULTANEOUS_PREPFOLDS', 'NUM_SIMULTANEOUS_PREPSUBBANDS', 'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
 
                 self.dict_survey_configuration = {}
 
@@ -2045,9 +2049,9 @@ class SurveyConfiguration(object):
                         if line != "\n" and (not line.startswith("#")):
                                 list_line = shlex.split(line)
                                 self.dict_survey_configuration[list_line[0]] = list_line[1]  # Save parameter key and value in the dictionary 
-
                 for key in list(self.dict_survey_configuration.keys()):
                         if   key == "SEARCH_LABEL":                      self.search_label                     = self.dict_survey_configuration[key]
+                        elif key == "DATA_TYPE":                         self.data_type                        = self.dict_survey_configuration[key]
                         elif key == "ROOT_WORKDIR":
                                 if self.dict_survey_configuration[key] == "(cwd)":
                                         self.root_workdir                     = os.getcwd()
@@ -2059,68 +2063,71 @@ class SurveyConfiguration(object):
                                                 print("Please make sure that the path of %s in your configuration file is correct." % (key))
                                                 print("Alternatively, you can use '(cwd)' to tell PULSAR_MINER to use the Current Working Directory as the ROOT_WORKDIR")
                                                 exit()
-                                                
-                        elif key == "FAST_BUFFER_DIR":                    self.fast_buffer_dir                  = self.dict_survey_configuration[key]
-                        elif key == "FLAG_KEEP_DATA_IN_BUFFER_DIR":       self.flag_keep_data_in_buffer_dir     = int(self.dict_survey_configuration[key])
-                        elif key == "FILE_LIST_DATAFILES":                self.list_datafiles_filename          = self.dict_survey_configuration[key]
-                        elif key == "FILE_COMMON_BIRDIES":                self.file_common_birdies              = self.dict_survey_configuration[key]
-                        elif key == "DATA_TYPE":                          self.data_type                        = self.dict_survey_configuration[key]
                         elif key == "PRESTO":
                                 if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
                                         self.presto_env                       = self.dict_survey_configuration[key]
                         elif key == "PRESTO_GPU":
                                 if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
-                                        self.presto_gpu_env                   = self.dict_survey_configuration[key]                                
+                                        self.presto_gpu_env                   = self.dict_survey_configuration[key]
                         elif key == "DM_MIN":                               self.dm_min                                = self.dict_survey_configuration[key]
                         elif key == "DM_MAX":                               self.dm_max                                = self.dict_survey_configuration[key]
                         elif key == "DM_COHERENT_DEDISPERSION":             self.dm_coherent_dedispersion              = self.dict_survey_configuration[key]
                         elif key == "N_SUBBANDS":                           self.nsubbands                             = int(self.dict_survey_configuration[key])
-                        elif key == "ZAP_ISOLATED_PULSARS_FROM_FFTS":       self.zap_isolated_pulsars_from_ffts        = int(self.dict_survey_configuration[key])
-                        elif key == "ZAP_ISOLATED_PULSARS_MAX_HARM":        self.zap_isolated_pulsars_max_harm         = int(self.dict_survey_configuration[key])
-                        elif key == "ACCELSEARCH_LIST_ZMAX":                self.accelsearch_list_zmax                 = [int(x) for x in self.dict_survey_configuration[key].split(",")]
-                        elif key == "ACCELSEARCH_NUMHARM":                  self.accelsearch_numharm                   = int(self.dict_survey_configuration[key])
-                        elif key == "JERKSEARCH_ZMAX":                      self.jerksearch_zmax                       = int(self.dict_survey_configuration[key])
-                        elif key == "JERKSEARCH_WMAX":                      self.jerksearch_wmax                       = int(self.dict_survey_configuration[key])
-                        elif key == "JERKSEARCH_NUMHARM":                   self.jerksearch_numharm                    = int(self.dict_survey_configuration[key])
-                        elif key == "JERKSEARCH_NCPUS":                     self.jerksearch_ncpus                      = int(self.dict_survey_configuration[key])
-                        elif key == "NUM_SIMULTANEOUS_JERKSEARCHES":        self.num_simultaneous_jerksearches         = int(self.dict_survey_configuration[key])
-
 
                         elif key == "PERIOD_TO_SEARCH_MIN":                 self.period_to_search_min                  = np.float64(self.dict_survey_configuration[key])
                         elif key == "PERIOD_TO_SEARCH_MAX":                 self.period_to_search_max                  = np.float64(self.dict_survey_configuration[key])
+                        elif key == "LIST_SEGMENTS":                        self.list_segments                         = self.dict_survey_configuration[key].split(",")
+
                         elif key == "RFIFIND_TIME":                         self.rfifind_time                          = self.dict_survey_configuration[key]
-                        elif key == "RFIFIND_FREQSIG":                      self.rfifind_freqsig                       = self.dict_survey_configuration[key]
-                        elif key == "RFIFIND_TIMESIG":                      self.rfifind_timesig                       = self.dict_survey_configuration[key]
-                        elif key == "RFIFIND_INTFRAC":                      self.rfifind_intfrac                       = self.dict_survey_configuration[key]
-                        elif key == "RFIFIND_CHANFRAC":                     self.rfifind_chanfrac                      = self.dict_survey_configuration[key]
                         elif key == "RFIFIND_CHANS_TO_ZAP":                 self.rfifind_chans_to_zap                  = self.dict_survey_configuration[key]
                         elif key == "RFIFIND_TIME_INTERVALS_TO_ZAP":        self.rfifind_time_intervals_to_zap         = self.dict_survey_configuration[key]
-                        elif key == "RFIFIND_FLAGS":                        self.rfifind_flags                         = self.dict_survey_configuration[key]
                         elif key == "IGNORECHAN_LIST":                      self.ignorechan_list                       = self.dict_survey_configuration[key]
-                        elif key == "PREPDATA_FLAGS":                       self.prepdata_flags                        = self.dict_survey_configuration[key]
-                        elif key == "PREPSUBBAND_FLAGS":                    self.prepsubband_flags                     = self.dict_survey_configuration[key]
-                        elif key == "REALFFT_FLAGS":                        self.realfft_flags                         = self.dict_survey_configuration[key]
-                        elif key == "REDNOISE_FLAGS":                       self.rednoise_flags                        = self.dict_survey_configuration[key]
-                        elif key == "ACCELSEARCH_FLAGS":                    self.accelsearch_flags                     = self.dict_survey_configuration[key]
-                        elif key == "ACCELSEARCH_GPU_FLAGS":                self.accelsearch_gpu_flags                 = self.dict_survey_configuration[key]
-                        elif key == "FLAG_REMOVE_FFTFILES":                 self.flag_remove_fftfiles                  = int(self.dict_survey_configuration[key])
-                        elif key == "FLAG_REMOVE_DATFILES_OF_SEGMENTS":     self.flag_remove_datfiles_of_segments      = int(self.dict_survey_configuration[key])
-                        elif key == "USE_CUDA":                             self.flag_use_cuda                         = int(self.dict_survey_configuration[key])
-                        elif key == "CUDA_IDS":                             self.list_cuda_ids                         = [int(x) for x in self.dict_survey_configuration[key].split(",")]
-                        elif key == "LIST_SEGMENTS":                        self.list_segments                         = self.dict_survey_configuration[key].split(",")
+                        elif key == "ZAP_ISOLATED_PULSARS_FROM_FFTS":       self.zap_isolated_pulsars_from_ffts        = int(self.dict_survey_configuration[key])
+                        elif key == "ZAP_ISOLATED_PULSARS_MAX_HARM":        self.zap_isolated_pulsars_max_harm         = int(self.dict_survey_configuration[key])
+			
+                        elif key == "FLAG_ACCELERATION_SEARCH":             self.flag_acceleration_search              = int(self.dict_survey_configuration[key])
+                        elif key == "ACCELSEARCH_LIST_ZMAX":                self.accelsearch_list_zmax                 = [int(x) for x in self.dict_survey_configuration[key].split(",")]
+                        elif key == "ACCELSEARCH_NUMHARM":                  self.accelsearch_numharm                   = int(self.dict_survey_configuration[key])
+
+                        elif key == "FLAG_JERK_SEARCH":                     self.flag_jerk_search                      = int(self.dict_survey_configuration[key])
+                        elif key == "JERKSEARCH_ZMAX":                      self.jerksearch_zmax                       = int(self.dict_survey_configuration[key])
+                        elif key == "JERKSEARCH_WMAX":                      self.jerksearch_wmax                       = int(self.dict_survey_configuration[key])
+                        elif key == "JERKSEARCH_NUMHARM":                   self.jerksearch_numharm                    = int(self.dict_survey_configuration[key])
+
                         elif key == "SIFTING_FLAG_REMOVE_DUPLICATES":       self.sifting_flag_remove_duplicates        = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_FLAG_REMOVE_DM_PROBLEMS":      self.sifting_flag_remove_dm_problems       = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_FLAG_REMOVE_HARMONICS":        self.sifting_flag_remove_harmonics         = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_MINIMUM_NUM_DMS":              self.sifting_minimum_num_DMs               = int(self.dict_survey_configuration[key])
                         elif key == "SIFTING_MINIMUM_DM":                   self.sifting_minimum_DM                    = np.float64(self.dict_survey_configuration[key])
                         elif key == "SIFTING_SIGMA_THRESHOLD":              self.sifting_sigma_threshold               = np.float64(self.dict_survey_configuration[key])
-                        elif key == "PREPFOLD_FLAGS":                       self.prepfold_flags                        = self.dict_survey_configuration[key]
-                        elif key == "MAX_SIMULTANEOUS_PREPSUBBANDS":        self.max_simultaneous_prepsubbands         = int(self.dict_survey_configuration[key])
-                        elif key == "MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND": self.max_simultaneous_dms_per_prepsubband  = int(self.dict_survey_configuration[key])
-                        elif key == "NUM_SIMULTANEOUS_FOLDS":               self.num_simultaneous_folds                = int(self.dict_survey_configuration[key])
+
                         elif key == "FLAG_FOLD_KNOWN_PULSARS":              self.flag_fold_known_pulsars               = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_TIMESERIES":                 self.flag_fold_timeseries                  = int(self.dict_survey_configuration[key])
                         elif key == "FLAG_FOLD_RAWDATA":                    self.flag_fold_rawdata                     = int(self.dict_survey_configuration[key])
+
+                        elif key == "RFIFIND_FLAGS":                        self.rfifind_flags                         = self.dict_survey_configuration[key]
+                        elif key == "PREPDATA_FLAGS":                       self.prepdata_flags                        = self.dict_survey_configuration[key]
+                        elif key == "PREPSUBBAND_FLAGS":                    self.prepsubband_flags                     = self.dict_survey_configuration[key]
+                        elif key == "REALFFT_FLAGS":                        self.realfft_flags                         = self.dict_survey_configuration[key]
+                        elif key == "REDNOISE_FLAGS":                       self.rednoise_flags                        = self.dict_survey_configuration[key]
+                        elif key == "ACCELSEARCH_FLAGS":                    self.accelsearch_flags                     = self.dict_survey_configuration[key]
+                        elif key == "ACCELSEARCH_GPU_FLAGS":                self.accelsearch_gpu_flags                 = self.dict_survey_configuration[key]
+                        elif key == "ACCELSEARCH_JERK_FLAGS":               self.accelsearch_jerk_flags                = self.dict_survey_configuration[key]
+                        elif key == "PREPFOLD_FLAGS":                       self.prepfold_flags                        = self.dict_survey_configuration[key]
+
+                        elif key == "USE_CUDA":                             self.flag_use_cuda                         = int(self.dict_survey_configuration[key])
+                        elif key == "CUDA_IDS":                             self.list_cuda_ids                         = [int(x) for x in self.dict_survey_configuration[key].split(",")]
+
+                        elif key == "NUM_SIMULTANEOUS_JERKSEARCHES":        self.num_simultaneous_jerksearches         = int(self.dict_survey_configuration[key])
+                        elif key == "NUM_SIMULTANEOUS_PREPFOLDS":           self.num_simultaneous_prepfolds            = int(self.dict_survey_configuration[key])
+                        elif key == "NUM_SIMULTANEOUS_PREPSUBBANDS":        self.num_simultaneous_prepsubbands         = int(self.dict_survey_configuration[key])
+                        elif key == "MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND": self.max_simultaneous_dms_per_prepsubband  = int(self.dict_survey_configuration[key])
+
+                        elif key == "FAST_BUFFER_DIR":                      self.fast_buffer_dir                       = self.dict_survey_configuration[key]
+                        elif key == "FLAG_KEEP_DATA_IN_BUFFER_DIR":         self.flag_keep_data_in_buffer_dir          = int(self.dict_survey_configuration[key])
+                        elif key == "FLAG_REMOVE_FFTFILES":                 self.flag_remove_fftfiles                  = int(self.dict_survey_configuration[key])
+                        elif key == "FLAG_REMOVE_DATFILES_OF_SEGMENTS":     self.flag_remove_datfiles_of_segments      = int(self.dict_survey_configuration[key])
+
                         elif key == "STEP_RFIFIND":                         self.flag_step_rfifind                     = int(self.dict_survey_configuration[key])
                         elif key == "STEP_ZAPLIST":                         self.flag_step_zaplist                     = int(self.dict_survey_configuration[key])
                         elif key == "STEP_DEDISPERSE":                      self.flag_step_dedisperse                  = int(self.dict_survey_configuration[key])
@@ -2128,6 +2135,7 @@ class SurveyConfiguration(object):
                         elif key == "STEP_PERIODICITY_SEARCH":              self.flag_step_periodicity_search          = int(self.dict_survey_configuration[key])
                         elif key == "STEP_SIFTING":                         self.flag_step_sifting                     = int(self.dict_survey_configuration[key])
                         elif key == "STEP_FOLDING":                         self.flag_step_folding                     = int(self.dict_survey_configuration[key])
+
 
                 config_file.close()
 
@@ -2215,73 +2223,66 @@ def init_default(observation_filename):
                                 exit()
 
         dict_survey_configuration_default_values = {'SEARCH_LABEL':                          "%s                # Label of this search project" % os.path.basename(os.getcwd()),
-                                                     'ROOT_WORKDIR':                          "(cwd)            # Path of the root working directory. Options: /absolute/path or '(cwd)' for current working directory",
-                                                     'FAST_BUFFER_DIR':                       "\"\"             # Path of a SSD/Fast memory buffer (minimizes I/O bottlenecks, optional)",
-                                                     'FLAG_KEEP_DATA_IN_BUFFER_DIR':          "0                # Keep copy of observation in buffer after searching? (1=yes, 0=no)",
-                                                     'DATA_TYPE':                             "%-18s            # Options: filterbank, psrfits" % (default_file_format),
-                                                     'PRESTO':                                "%s               # Path of the main PRESTO installation" % presto_path,
-                                                     'PRESTO_GPU':                            "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,
-                                                     'DM_MIN':                                "2.0              # Minimum DM to search",
-                                                     'DM_MAX':                                "100.0            # Maximum DM to search",
-                                                     'DM_COHERENT_DEDISPERSION':              "0                # DM value of possible coherent dedispersion (CDD) (0 = NO CDD)",
-                                                     'N_SUBBANDS':                            "0                # Number of subbands to use (0 = use all channels)",
-                                                     'ZAP_ISOLATED_PULSARS_FROM_FFTS':        "0                # Zap the known pulsars in the power spectra? (1=yes, 0=no)",
-                                                     'ZAP_ISOLATED_PULSARS_MAX_HARM':         "8                # If zap the known pulsars in the power spectra, do it up to this harmonic ",
-                                                     'ACCELSEARCH_LIST_ZMAX':                 "0,200            # List (comma-separated) of zmax values to use with PRESTO accelsearch ",
-                                                     'ACCELSEARCH_NUMHARM':                   "8                # Number of harmonics to use for acceleration search",
-                                                     'JERKSEARCH_ZMAX':                       "0                # Zmax value to use for jerk search",
-                                                     'JERKSEARCH_WMAX':                       "0                # Wmax value to use for jerk search (0 = do not do jerk search)",
-                                                     'JERKSEARCH_NUMHARM':                    "4                # Number of harmonics to use for jerk search",
-                                                     'JERKSEARCH_NCPUS':                      "1                # Number of CPU threads to use for each single jerk search",
-                                                     'NUM_SIMULTANEOUS_JERKSEARCHES':         "%d               # Number of jerk search instances to run at once" % (multiprocessing.cpu_count()/2),
-
-                                                     'PERIOD_TO_SEARCH_MIN':                  "0.001            # Mimimum acceptable candidate period (s) ",
-                                                     'PERIOD_TO_SEARCH_MAX':                  "20.0             # Maximum acceptable candidate period (s) ",
-                                                     'RFIFIND_TIME':                          "2.1              # Value for RFIFIND -time option",
-                                                     'RFIFIND_FREQSIG':                       "6.0              # Value for RFIFIND -freqsig option",
-                                                     'RFIFIND_TIMESIG':                       "10.0             # Value for RFIFIND -timesig option",
-                                                     'RFIFIND_INTFRAC':                       "0.05             # Value for RFIFIND -intfrac option",
-                                                     'RFIFIND_CHANFRAC':                      "0.7              # Value for RFIFIND -chanfrac option",
-                                                     'RFIFIND_CHANS_TO_ZAP':                  "\"\"             # List of channels to zap in the RFIFIND mask",
-                                                     'RFIFIND_TIME_INTERVALS_TO_ZAP':         "\"\"             # List of time intervals to zap in the RFIFIND mask",
-                                                     'RFIFIND_FLAGS':                         "\"\"             # Any additional options to give to RFIFIND",
-
-                                                     'IGNORECHAN_LIST':                       "\"\"             # List of channels to completey ignore from the analysis (PRESTO -ignorechan option)",
-                                                     'PREPDATA_FLAGS':                        "\"\"             # Any additional options to give to PREPDATA",
-                                                     'PREPSUBBAND_FLAGS':                     "\"-ncpus 4\"     # Any additional options to give to PREPSUBBAND",
-                                                     'REALFFT_FLAGS':                         "\"\"             # Any additional options to give to REALFFT",
-                                                     'REDNOISE_FLAGS':                        "\"\"             # Any additional options to give to REDNOISE",
-                                                     'ACCELSEARCH_FLAGS':                     "\"\"             # Any additional options to give to ACCELSEARCH",
-                                                     'ACCELSEARCH_GPU_FLAGS':                 "\"\"             # Any additional options to give to ACCELSEARCH of PRESTO_ON_GPU",
-                                                     'PREPFOLD_FLAGS':                        "\"-ncpus %d -n 64\"     # Any additional options to give to PREPFOLD" % (multiprocessing.cpu_count()/4),
-                                                     'MAX_SIMULTANEOUS_PREPSUBBANDS':         "%d              # Maximum number of PREPSUBBAND instances to run at once" % (multiprocessing.cpu_count()/4),
-                                                     'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND':  "1000            # Number of simultaneous DM values processed at once by PREPSUBBAND (max 1000) ",
-                                                     'FLAG_REMOVE_FFTFILES':                  "1               # Remove FFT files after searching to save disk space? (1=yes, 0=no)",
-                                                     'FLAG_REMOVE_DATFILES_OF_SEGMENTS':      "1               # Remove .dat files of the shorter segments after searching to save disk space? (1=yes, 0=no)",
-
-                                                     'USE_CUDA':                              "%s               # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,
-                                                     'CUDA_IDS':                              "0               # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",
-                                                     'LIST_SEGMENTS':                         "full            # Comma-separated lengths (in minutes) of chunks to search (e.g. \"full,20,10\")",
-                                                     'NUM_SIMULTANEOUS_FOLDS':                "1               # Max number of prepfold instances to run at once",
-                                                     'SIFTING_FLAG_REMOVE_DUPLICATES' :       "1               # Remove candidate duplicates when sifting? (1=yes, 0=no)",
-                                                     'SIFTING_FLAG_REMOVE_DM_PROBLEMS' :      "1               # Remove candidates that appear in few DM values? (1=yes, 0=no)",
-                                                     'SIFTING_FLAG_REMOVE_HARMONICS' :        "1               # Remove harmoniacally related candidates? (1=yes, 0=no)",
-                                                     'SIFTING_MINIMUM_NUM_DMS' :              "3               # Minimum number of DM values at which a candidate has to appear in order to be considered 'good'",
-                                                     'SIFTING_MINIMUM_DM' :                   "2.0             # Minimum DM value at  at which a candidate has to appear in order to be considered 'good'",
-                                                     'SIFTING_SIGMA_THRESHOLD' :              "4.0             # Minimum acceptable significance of a candidate",
-
-                                                     'FLAG_FOLD_KNOWN_PULSARS' :              "1               # Fold candidates that are likely redetections of known pulsars? (1=yes, 0=no)",
-                                                     'FLAG_FOLD_TIMESERIES' :                 "0               # Fold the candidates using the time series (super-fast, but no frequency information)? (1=yes, 0=no)",
-                                                     'FLAG_FOLD_RAWDATA':                     "1               # Fold the candidates using raw data file (slow, but has all the information)? (1=yes, 0=no)",
-
-                                                     'STEP_RFIFIND':                          "1               # Run the RFIFIND step? (1=yes, 0=no)",
-                                                     'STEP_ZAPLIST':                          "1               # Run the ZAPLIST step? (1=yes, 0=no)",
-                                                     'STEP_DEDISPERSE':                       "1               # Run the DEDISPERSION step? (1=yes, 0=no)",
-                                                     'STEP_REALFFT':                          "1               # Run the REALFFT step? (1=yes, 0=no)",
-                                                     'STEP_PERIODICITY_SEARCH':               "1               # Run the PERIODICITY SEARCH step? (1=yes, 0=no)",
-                                                     'STEP_SIFTING':                          "1               # Run the SIFTING step? (1=yes, 0=no)",
-                                                     'STEP_FOLDING':                          "1               # Run the FOLDING step? (1=yes, 0=no)"
-                                                     }
+                                                    'DATA_TYPE':                             "%-18s            # Options: filterbank, psrfits" % (default_file_format),
+                                                    'ROOT_WORKDIR':                          "(cwd)            # Path of the root working directory. Options: /absolute/path or '(cwd)' for current working directory",
+                                                    'PRESTO':                                "%s               # Path of the main PRESTO installation" % presto_path,
+                                                    'PRESTO_GPU':                            "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,
+                                                    'DM_MIN':                                "2.0                    # Minimum DM to search",
+                                                    'DM_MAX':                                "100.0                  # Maximum DM to search",
+                                                    'DM_COHERENT_DEDISPERSION':              "0                      # DM value of possible coherent dedispersion (CDD) (0 = NO CDD)",
+                                                    'N_SUBBANDS':                            "0                      # Number of subbands to use (0 = use all channels)",
+                                                    'PERIOD_TO_SEARCH_MIN':                  "0.001                  # Mimimum acceptable candidate period (s) ",
+                                                    'PERIOD_TO_SEARCH_MAX':                  "20.0                   # Maximum acceptable candidate period (s) ",
+                                                    'LIST_SEGMENTS':                         "full                   # Comma-separated lengths (in minutes) of chunks to search (e.g. \"full,20,10\")",
+                                                    'RFIFIND_TIME':                          "2.1                    # Value for RFIFIND -time option",
+                                                    'RFIFIND_CHANS_TO_ZAP':                  "\"\"                     # List of channels to zap in the RFIFIND mask",
+                                                    'RFIFIND_TIME_INTERVALS_TO_ZAP':         "\"\"                     # List of time intervals to zap in the RFIFIND mask",
+                                                    'IGNORECHAN_LIST':                       "\"\"                     # List of channels to completey ignore from the analysis (PRESTO -ignorechan option)",
+                                                    'ZAP_ISOLATED_PULSARS_FROM_FFTS':        "0                      # Zap the known pulsars in the power spectra? (1=yes, 0=no)",
+                                                    'ZAP_ISOLATED_PULSARS_MAX_HARM':         "8                      # If zap the known pulsars in the power spectra, do it up to this harmonic ",
+                                                    'FLAG_ACCELERATION_SEARCH':              "1                      # Perform acceleration search? (1=yes, 0=no)",
+                                                    'ACCELSEARCH_LIST_ZMAX':                 "0,200                  # List (comma-separated) of zmax values to use with PRESTO accelsearch ",
+                                                    'ACCELSEARCH_NUMHARM':                   "8                      # Number of harmonics to use for acceleration search",
+                                                    'FLAG_JERK_SEARCH':                      "0                      # Perform acceleration search? (1=yes, 0=no)",
+                                                    'JERKSEARCH_ZMAX':                       "100                    # Zmax value to use for jerk search",
+                                                    'JERKSEARCH_WMAX':                       "300                    # Wmax value to use for jerk search (0 = do not do jerk search)",
+                                                    'JERKSEARCH_NUMHARM':                    "4                      # Number of harmonics to use for jerk search",
+                                                    'SIFTING_FLAG_REMOVE_DUPLICATES' :       "1                      # Remove candidate duplicates when sifting? (1=yes, 0=no)",
+                                                    'SIFTING_FLAG_REMOVE_DM_PROBLEMS' :      "1                      # Remove candidates that appear in few DM values? (1=yes, 0=no)",
+                                                    'SIFTING_FLAG_REMOVE_HARMONICS' :        "1                      # Remove harmoniacally related candidates? (1=yes, 0=no)",
+                                                    'SIFTING_MINIMUM_NUM_DMS' :              "3                      # Minimum number of DM values at which a candidate has to appear in order to be considered 'good'",
+                                                    'SIFTING_MINIMUM_DM' :                   "2.0                    # Minimum DM value at  at which a candidate has to appear in order to be considered 'good'",
+                                                    'SIFTING_SIGMA_THRESHOLD' :              "4.0                    # Minimum acceptable significance of a candidate",
+                                                    'FLAG_FOLD_KNOWN_PULSARS' :              "1                      # Fold candidates that are likely redetections of known pulsars? (1=yes, 0=no)",
+                                                    'FLAG_FOLD_TIMESERIES' :                 "0                      # Fold the candidates using the time series (super-fast, but no frequency information)? (1=yes, 0=no)",
+                                                    'FLAG_FOLD_RAWDATA':                     "1                      # Fold the candidates using raw data file (slow, but has all the information)? (1=yes, 0=no)",
+                                                    'RFIFIND_FLAGS':                         "\"\"                     # Any additional options to give to RFIFIND",
+                                                    'PREPDATA_FLAGS':                        "\"\"                     # Any additional options to give to PREPDATA",
+                                                    'PREPSUBBAND_FLAGS':                     "\"-ncpus 4\"             # Any additional options to give to PREPSUBBAND",
+                                                    'REALFFT_FLAGS':                         "\"\"                     # Any additional options to give to REALFFT",
+                                                    'REDNOISE_FLAGS':                        "\"\"                     # Any additional options to give to REDNOISE",
+                                                    'ACCELSEARCH_FLAGS':                     "\"\"                     # Any additional options to give to ACCELSEARCH when doing acceleration search",
+                                                    'ACCELSEARCH_GPU_FLAGS':                 "\"\"                     # Any additional options to give to ACCELSEARCH when doing acceleration search with PRESTO_ON_GPU",
+                                                    'ACCELSEARCH_JERK_FLAGS':                "\"\"                     # Any additional options to give to ACCELSEARCH when doing jerk search",
+                                                    'PREPFOLD_FLAGS':                        "\"-ncpus %-3d -n 64\"     # Any additional options to give to PREPFOLD" % (multiprocessing.cpu_count()/4),
+                                                    'USE_CUDA':                              "%s                      # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,
+                                                    'CUDA_IDS':                              "0                      # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",
+                                                    'NUM_SIMULTANEOUS_JERKSEARCHES':         "%-4d                   # Number of jerk search instances to run at once" % (multiprocessing.cpu_count()),
+                                                    'NUM_SIMULTANEOUS_PREPFOLDS':            "4                      # Max number of prepfold instances to run at once",
+                                                    'NUM_SIMULTANEOUS_PREPSUBBANDS':         "%-4d                   # Maximum number of prepsubband instances to run at once" % (multiprocessing.cpu_count()/4),
+                                                    'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND':  "1000                   # Number of simultaneous DM values processed at once by prepsubband (max 1000) ",
+                                                    'FAST_BUFFER_DIR':                       "\"\"                     # Path of a SSD/Fast memory buffer (minimizes I/O bottlenecks, optional)",
+                                                    'FLAG_KEEP_DATA_IN_BUFFER_DIR':          "0                      # Keep copy of observation in buffer after searching? (1=yes, 0=no)",
+                                                    'FLAG_REMOVE_FFTFILES':                  "1                      # Remove FFT files after searching to save disk space? (1=yes, 0=no)",
+                                                    'FLAG_REMOVE_DATFILES_OF_SEGMENTS':      "1                      # Remove .dat files of the shorter segments after searching to save disk space? (1=yes, 0=no)",                                                     
+                                                    'STEP_RFIFIND':                          "1                      # Run the RFIFIND step? (1=yes, 0=no)",
+                                                    'STEP_ZAPLIST':                          "1                      # Run the ZAPLIST step? (1=yes, 0=no)",
+                                                    'STEP_DEDISPERSE':                       "1                      # Run the DEDISPERSION step? (1=yes, 0=no)",
+                                                    'STEP_REALFFT':                          "1                      # Run the REALFFT step? (1=yes, 0=no)",
+                                                    'STEP_PERIODICITY_SEARCH':               "1                      # Run the PERIODICITY SEARCH step? (1=yes, 0=no)",
+                                                    'STEP_SIFTING':                          "1                      # Run the SIFTING step? (1=yes, 0=no)",
+                                                    'STEP_FOLDING':                          "1                      # Run the FOLDING step? (1=yes, 0=no)"
+                                                    }
 
         default_cfg_filename = "%s.cfg" % (os.path.basename(os.getcwd()))
         if os.path.exists(default_cfg_filename):
@@ -2292,62 +2293,48 @@ def init_default(observation_filename):
                 print("******************")
                 print()
         with open(default_cfg_filename, "w") as f:
+                f.write("#===============================================================\n")
+                f.write("# General parameters\n")
+                f.write("#===============================================================\n")
                 f.write("%-40s %s\n" % ('SEARCH_LABEL', dict_survey_configuration_default_values['SEARCH_LABEL']))
-                f.write("%-40s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
-                f.write("%-40s %s\n" % ('FAST_BUFFER_DIR', dict_survey_configuration_default_values['FAST_BUFFER_DIR']))
-                f.write("%-40s %s\n" % ('FLAG_KEEP_DATA_IN_BUFFER_DIR', dict_survey_configuration_default_values['FLAG_KEEP_DATA_IN_BUFFER_DIR']))
                 f.write("%-40s %s\n" % ('DATA_TYPE', dict_survey_configuration_default_values['DATA_TYPE']))
-                f.write("\n")
-                f.write("# PRESTO installations and GPU acceleration\n")
+                f.write("%-40s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
                 f.write("%-40s %s\n" % ('PRESTO', dict_survey_configuration_default_values['PRESTO']))
                 f.write("%-40s %s\n" % ('PRESTO_GPU', dict_survey_configuration_default_values['PRESTO_GPU']))
-                f.write("%-40s %s\n" % ('USE_CUDA', dict_survey_configuration_default_values['USE_CUDA']))
-                f.write("%-40s %s\n" % ('CUDA_IDS', dict_survey_configuration_default_values['CUDA_IDS']))
                 f.write("\n")
+                f.write("#===============================================================\n")
                 f.write("# Core search parameters\n")
+                f.write("#===============================================================\n")
                 f.write("%-40s %s\n" % ('DM_MIN', dict_survey_configuration_default_values['DM_MIN']))
                 f.write("%-40s %s\n" % ('DM_MAX', dict_survey_configuration_default_values['DM_MAX']))
                 f.write("%-40s %s\n" % ('DM_COHERENT_DEDISPERSION', dict_survey_configuration_default_values['DM_COHERENT_DEDISPERSION']))
                 f.write("%-40s %s\n" % ('N_SUBBANDS', dict_survey_configuration_default_values['N_SUBBANDS']))
-                f.write("\n")
-                f.write("%-40s %s\n" % ('ZAP_ISOLATED_PULSARS_FROM_FFTS', dict_survey_configuration_default_values['ZAP_ISOLATED_PULSARS_FROM_FFTS']))
-                f.write("%-40s %s\n" % ('ZAP_ISOLATED_PULSARS_MAX_HARM', dict_survey_configuration_default_values['ZAP_ISOLATED_PULSARS_MAX_HARM']))
-                f.write("\n")
+                f.write("\n")                
                 f.write("%-40s %s\n" % ('PERIOD_TO_SEARCH_MIN', dict_survey_configuration_default_values['PERIOD_TO_SEARCH_MIN']))
                 f.write("%-40s %s\n" % ('PERIOD_TO_SEARCH_MAX', dict_survey_configuration_default_values['PERIOD_TO_SEARCH_MAX']))
                 f.write("\n")
                 f.write("%-40s %s\n" % ('LIST_SEGMENTS', dict_survey_configuration_default_values['LIST_SEGMENTS']))
-                f.write("%-40s %s\n" % ('ACCELSEARCH_LIST_ZMAX', dict_survey_configuration_default_values['ACCELSEARCH_LIST_ZMAX']))
-                f.write("%-40s %s\n" % ('ACCELSEARCH_NUMHARM', dict_survey_configuration_default_values['ACCELSEARCH_NUMHARM']))
-                f.write("%-40s %s\n" % ('JERKSEARCH_ZMAX', dict_survey_configuration_default_values['JERKSEARCH_ZMAX']))
-                f.write("%-40s %s\n" % ('JERKSEARCH_WMAX', dict_survey_configuration_default_values['JERKSEARCH_WMAX']))
-                f.write("%-40s %s\n" % ('JERKSEARCH_NUMHARM', dict_survey_configuration_default_values['JERKSEARCH_NUMHARM']))
-                f.write("%-40s %s\n" % ('JERKSEARCH_NCPUS', dict_survey_configuration_default_values['JERKSEARCH_NCPUS']))
-                f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_JERKSEARCHES', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_JERKSEARCHES']))
-
                 f.write("\n")
-                f.write("# RFIFIND parameters\n")
+                f.write("#===============================================================\n")
+                f.write("# Fourier domain search with PRESTO\n")
+                f.write("#===============================================================\n")
                 f.write("%-40s %s\n" % ('RFIFIND_TIME', dict_survey_configuration_default_values['RFIFIND_TIME']))
-                f.write("%-40s %s\n" % ('RFIFIND_FREQSIG', dict_survey_configuration_default_values['RFIFIND_FREQSIG']))
-                f.write("%-40s %s\n" % ('RFIFIND_TIMESIG', dict_survey_configuration_default_values['RFIFIND_TIMESIG']))
-                f.write("%-40s %s\n" % ('RFIFIND_INTFRAC', dict_survey_configuration_default_values['RFIFIND_INTFRAC']))
-                f.write("%-40s %s\n" % ('RFIFIND_CHANFRAC', dict_survey_configuration_default_values['RFIFIND_CHANFRAC']))
                 f.write("%-40s %s\n" % ('RFIFIND_CHANS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_CHANS_TO_ZAP']))
                 f.write("%-40s %s\n" % ('RFIFIND_TIME_INTERVALS_TO_ZAP', dict_survey_configuration_default_values['RFIFIND_TIME_INTERVALS_TO_ZAP']))
                 f.write("%-40s %s\n" % ('IGNORECHAN_LIST', dict_survey_configuration_default_values['IGNORECHAN_LIST']))
                 f.write("\n")
-                f.write("# Additional flags for all the PRESTO routines\n")
-                f.write("%-40s %s\n" % ('RFIFIND_FLAGS', dict_survey_configuration_default_values['RFIFIND_FLAGS']))
-                f.write("%-40s %s\n" % ('PREPDATA_FLAGS', dict_survey_configuration_default_values['PREPDATA_FLAGS']))
-                f.write("%-40s %s\n" % ('PREPSUBBAND_FLAGS', dict_survey_configuration_default_values['PREPSUBBAND_FLAGS']))
-                f.write("%-40s %s\n" % ('REALFFT_FLAGS', dict_survey_configuration_default_values['REALFFT_FLAGS']))
-                f.write("%-40s %s\n" % ('REDNOISE_FLAGS', dict_survey_configuration_default_values['REDNOISE_FLAGS']))
-                f.write("%-40s %s\n" % ('ACCELSEARCH_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_FLAGS']))
-                f.write("%-40s %s\n" % ('ACCELSEARCH_GPU_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_GPU_FLAGS']))
-                f.write("%-40s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
+                f.write("%-40s %s\n" % ('ZAP_ISOLATED_PULSARS_FROM_FFTS', dict_survey_configuration_default_values['ZAP_ISOLATED_PULSARS_FROM_FFTS']))
+                f.write("%-40s %s\n" % ('ZAP_ISOLATED_PULSARS_MAX_HARM', dict_survey_configuration_default_values['ZAP_ISOLATED_PULSARS_MAX_HARM']))
                 f.write("\n")
-                f.write("%-40s %s\n" % ('FLAG_REMOVE_FFTFILES', dict_survey_configuration_default_values['FLAG_REMOVE_FFTFILES']))
-                f.write("%-40s %s\n" % ('FLAG_REMOVE_DATFILES_OF_SEGMENTS', dict_survey_configuration_default_values['FLAG_REMOVE_DATFILES_OF_SEGMENTS']))
+                f.write("%-40s %s\n" % ('FLAG_ACCELERATION_SEARCH', dict_survey_configuration_default_values['FLAG_ACCELERATION_SEARCH']))
+                f.write("%-40s %s\n" % ('ACCELSEARCH_LIST_ZMAX', dict_survey_configuration_default_values['ACCELSEARCH_LIST_ZMAX']))
+                f.write("%-40s %s\n" % ('ACCELSEARCH_NUMHARM', dict_survey_configuration_default_values['ACCELSEARCH_NUMHARM']))
+                f.write("\n")
+                f.write("%-40s %s\n" % ('FLAG_JERK_SEARCH', dict_survey_configuration_default_values['FLAG_JERK_SEARCH']))
+                f.write("%-40s %s\n" % ('JERKSEARCH_ZMAX', dict_survey_configuration_default_values['JERKSEARCH_ZMAX']))
+                f.write("%-40s %s\n" % ('JERKSEARCH_WMAX', dict_survey_configuration_default_values['JERKSEARCH_WMAX']))
+                f.write("%-40s %s\n" % ('JERKSEARCH_NUMHARM', dict_survey_configuration_default_values['JERKSEARCH_NUMHARM']))
+                f.write("\n")
                 f.write("%-40s %s\n" % ('SIFTING_FLAG_REMOVE_DUPLICATES', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DUPLICATES']))
                 f.write("%-40s %s\n" % ('SIFTING_FLAG_REMOVE_DM_PROBLEMS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_DM_PROBLEMS']))
                 f.write("%-40s %s\n" % ('SIFTING_FLAG_REMOVE_HARMONICS', dict_survey_configuration_default_values['SIFTING_FLAG_REMOVE_HARMONICS']))
@@ -2358,11 +2345,36 @@ def init_default(observation_filename):
                 f.write("%-40s %s\n" % ('FLAG_FOLD_KNOWN_PULSARS', dict_survey_configuration_default_values['FLAG_FOLD_KNOWN_PULSARS']))
                 f.write("%-40s %s\n" % ('FLAG_FOLD_TIMESERIES', dict_survey_configuration_default_values['FLAG_FOLD_TIMESERIES']))
                 f.write("%-40s %s\n" % ('FLAG_FOLD_RAWDATA', dict_survey_configuration_default_values['FLAG_FOLD_RAWDATA']))
-                f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_FOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_FOLDS']))
-                f.write("%-40s %s\n" % ('MAX_SIMULTANEOUS_PREPSUBBANDS', dict_survey_configuration_default_values['MAX_SIMULTANEOUS_PREPSUBBANDS']))
+                f.write("\n")
+                f.write("%-40s %s\n" % ('RFIFIND_FLAGS', dict_survey_configuration_default_values['RFIFIND_FLAGS']))
+                f.write("%-40s %s\n" % ('PREPDATA_FLAGS', dict_survey_configuration_default_values['PREPDATA_FLAGS']))
+                f.write("%-40s %s\n" % ('PREPSUBBAND_FLAGS', dict_survey_configuration_default_values['PREPSUBBAND_FLAGS']))
+                f.write("%-40s %s\n" % ('REALFFT_FLAGS', dict_survey_configuration_default_values['REALFFT_FLAGS']))
+                f.write("%-40s %s\n" % ('REDNOISE_FLAGS', dict_survey_configuration_default_values['REDNOISE_FLAGS']))
+                f.write("%-40s %s\n" % ('ACCELSEARCH_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_FLAGS']))
+                f.write("%-40s %s\n" % ('ACCELSEARCH_GPU_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_GPU_FLAGS']))
+                f.write("%-40s %s\n" % ('ACCELSEARCH_JERK_FLAGS', dict_survey_configuration_default_values['ACCELSEARCH_JERK_FLAGS']))
+                f.write("%-40s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
+                f.write("\n")
+                f.write("#===============================================================\n")
+                f.write("# Computational/Performance parameters\n")
+                f.write("#===============================================================\n")
+                f.write("%-40s %s\n" % ('USE_CUDA', dict_survey_configuration_default_values['USE_CUDA']))
+                f.write("%-40s %s\n" % ('CUDA_IDS', dict_survey_configuration_default_values['CUDA_IDS']))
+                f.write("\n")
+                f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_JERKSEARCHES', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_JERKSEARCHES']))
+                f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_PREPFOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_PREPFOLDS']))
+                f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_PREPSUBBANDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_PREPSUBBANDS']))
                 f.write("%-40s %s\n" % ('MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', dict_survey_configuration_default_values['MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND']))
                 f.write("\n")
-                f.write("# PIPELINE STEPS TO EXECUTE (1=do, 0=skip)\n")
+                f.write("%-40s %s\n" % ('FAST_BUFFER_DIR', dict_survey_configuration_default_values['FAST_BUFFER_DIR']))
+                f.write("%-40s %s\n" % ('FLAG_KEEP_DATA_IN_BUFFER_DIR', dict_survey_configuration_default_values['FLAG_KEEP_DATA_IN_BUFFER_DIR'])) 
+                f.write("%-40s %s\n" % ('FLAG_REMOVE_FFTFILES', dict_survey_configuration_default_values['FLAG_REMOVE_FFTFILES']))
+                f.write("%-40s %s\n" % ('FLAG_REMOVE_DATFILES_OF_SEGMENTS', dict_survey_configuration_default_values['FLAG_REMOVE_DATFILES_OF_SEGMENTS']))
+                f.write("\n")                        
+                f.write("#===============================================================\n")
+                f.write("# Pipeline steps to execute (1=do, 0=skip)\n")
+                f.write("#===============================================================\n")
                 f.write("%-40s %s\n" % ('STEP_RFIFIND', dict_survey_configuration_default_values['STEP_RFIFIND']))
                 f.write("%-40s %s\n" % ('STEP_ZAPLIST', dict_survey_configuration_default_values['STEP_ZAPLIST']))
                 f.write("%-40s %s\n" % ('STEP_DEDISPERSE', dict_survey_configuration_default_values['STEP_DEDISPERSE']))
@@ -2370,7 +2382,10 @@ def init_default(observation_filename):
                 f.write("%-40s %s\n" % ('STEP_PERIODICITY_SEARCH', dict_survey_configuration_default_values['STEP_PERIODICITY_SEARCH']))
                 f.write("%-40s %s\n" % ('STEP_SIFTING', dict_survey_configuration_default_values['STEP_SIFTING']))
                 f.write("%-40s %s\n" % ('STEP_FOLDING', dict_survey_configuration_default_values['STEP_FOLDING']))
-                # f.write("%-40s %s\n" % ('', dict_survey_configuration_default_values['']))
+                f.write("\n")
+                f.write("#===============================================================\n")
+                f.write("# Configuration file made with PULSAR_MINER version %s\n" % string_version_full)
+
 
         print()
         print("Default configuration written onto '%s'." % (default_cfg_filename))
@@ -2755,10 +2770,6 @@ for i in range(len(config.list_Observations)):
                                    LOG_dir,
                                    LOG_basename,
                                    config.rfifind_time,
-                                   config.rfifind_freqsig,
-                                   config.rfifind_timesig,
-                                   config.rfifind_intfrac,
-                                   config.rfifind_chanfrac,
                                    config.rfifind_time_intervals_to_zap,
                                    config.rfifind_chans_to_zap,
                                    config.rfifind_flags,
@@ -3112,17 +3123,18 @@ if config.flag_step_dedisperse == 1:
                                                                                list_DDplan_scheme,
                                                                                config.list_Observations[i].nchan,
                                                                                config.nsubbands,
-                                                                               config.max_simultaneous_prepsubbands,
+                                                                               config.num_simultaneous_prepsubbands,
                                                                                config.prepsubband_flags,
                                                                                config.presto_env,
                                                                                config.flag_use_cuda,
                                                                                config.list_cuda_ids,
+                                                                               config.flag_acceleration_search,
                                                                                config.accelsearch_numharm,
                                                                                config.accelsearch_list_zmax,
+                                                                               config.flag_jerk_search,
                                                                                config.jerksearch_zmax,
                                                                                config.jerksearch_wmax,
                                                                                config.jerksearch_numharm,
-                                                                               config.jerksearch_ncpus,
                                                                                config.num_simultaneous_jerksearches,
                                                                                config.period_to_search_min,
                                                                                config.period_to_search_max,
@@ -3343,7 +3355,7 @@ if config.flag_step_folding == 1:
                                                                 verbosity_level,
                                                                 1,
                                                                 "timeseries",
-                                                               config.num_simultaneous_folds
+                                                               config.num_simultaneous_prepfolds
                                                         )
 
                                                         tend_folding_cand_ts = time.time()
@@ -3380,13 +3392,13 @@ if config.flag_step_folding == 1:
                                                                 verbosity_level,
                                                                 1,
                                                                 "rawdata",
-                                                               config.num_simultaneous_folds
+                                                               config.num_simultaneous_prepfolds
                                                 )
 
                                                 count_folded_raw = count_folded_raw + 1
 
                 os.chdir(work_dir_candidate_folding)
-                cmd_pm_run_multithread = "%s/pm_run_multithread -cmdfile %s -ncpus %d" % (os.path.dirname(sys.argv[0]), file_script_fold_abspath, config.num_simultaneous_folds)
+                cmd_pm_run_multithread = "%s/pm_run_multithread -cmdfile %s -ncpus %d" % (os.path.dirname(sys.argv[0]), file_script_fold_abspath, config.num_simultaneous_prepfolds)
                 print()
                 print()
                 print("5) CANDIDATE FOLDING - Now running:")
