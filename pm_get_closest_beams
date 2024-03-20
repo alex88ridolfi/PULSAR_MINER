@@ -5,6 +5,7 @@ import os
 import os.path
 import glob
 import numpy as np
+import subprocess
 from presto import psrfits, filterbank
 
 
