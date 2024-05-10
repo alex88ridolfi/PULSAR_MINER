@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (05Feb2024)"
-string_version = "05Feb2024"
-number_version = 20240205
+string_version_full = "2.0-beta (10May2024)"
+string_version = "10May2024"
+number_version = 20240510
 
 class colors:
     HEADER = '\033[95m'
@@ -2068,6 +2068,7 @@ class SurveyConfiguration(object):
                         elif key == "PRESTO":
                                 if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
                                         self.presto_env                       = self.dict_survey_configuration[key]
+
                         elif key == "PRESTO_GPU":
                                 if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
                                         self.presto_gpu_env                   = self.dict_survey_configuration[key]
@@ -2506,14 +2507,31 @@ if number_latest_version > number_version:
 config = SurveyConfiguration(config_filename, verbosity_level)
 
 
-# If input only a list of observations...
+# If option '-obs' was forgotten....
 if obsname =="":
-        config.list_datafiles             = config.get_list_datafiles(list_obs_filename)
-        config.folder_datafiles = os.path.dirname(os.path.abspath(config.list_datafiles[0]))  # ..the location of the first file is the location of all the data
+        print()
+        print("%sERROR:%s Please give the observation file through the '-obs' option." % (colors.ERROR+colors.BOLD, colors.ENDCOLOR))
+        exit()
 
-# Else, if input only a single observation...
+# Else...
 elif obsname !="":
         config.list_datafiles            = [os.path.basename(x) for x in glob.glob(obsname)]
+        if len(config.list_datafiles) == 0:
+                print()
+                print("%sERROR:%s No observation file was found! Are you sure that the file name is correct?" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR))
+                exit()
+        elif len(config.list_datafiles) >= 1:
+                for f in config.list_datafiles:
+                        if not os.path.exists(f):
+                                print()
+                                print("%sERROR:%s File '%s' does not exists! Perhaps you are using a broken symbolic link?" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, f))
+                                exit()
+                        elif os.path.getsize(f) == 0:
+                                print()
+                                print("%sERROR:%s File '%s' has size 0!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, f))
+                                exit()
+
+        
         if verbosity_level >= 3:
                 print("config.list_datafiles = ", config.list_datafiles)
         config.folder_datafiles           = os.path.dirname(os.path.abspath(obsname))   # ...the location of the input file is the location of all the data
