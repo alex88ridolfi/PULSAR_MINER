@@ -32,7 +32,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version_full = "2.0-beta (10May2024)"
 string_version = "10May2024"
-number_version = 20240510.1
+number_version = 20240510.2
 
 class colors:
     HEADER = '\033[95m'
@@ -1855,13 +1855,14 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                 file_script_prepsubband.write("%s\n" % cmd_prepsubband)
 
         file_script_prepsubband.close()
-                        
+
+
         if verbosity_level >= 1:
                 print("Dedispersing with %d subbands (original number of channels: %d)" % (nsubbands, nchan))
                 print()
-                if config.num_simultaneous_prepsubbands == 1:
+                if N_schemes == 1:
                         print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mtail -f %s\033[0m'" % (log_abspath))
-                elif config.num_simultaneous_prepsubbands > 1:
+                elif N_schemes > 1:
                         print("\033[1m >> TIP:\033[0m Check prepsubband progress with '\033[1mfor f in %s/LOG_prepsubband_*.txt; do tail -1 ${f}; echo; done\033[0m'" % (LOG_dir))
                 print()
 
