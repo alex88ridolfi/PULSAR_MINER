@@ -32,7 +32,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version_full = "2.0-beta (10May2024)"
 string_version = "10May2024"
-number_version = 20240510
+number_version = 20240510.1
 
 class colors:
     HEADER = '\033[95m'
@@ -2579,12 +2579,19 @@ if os.path.exists(dir_known_pulsars):
                                 print("%s  -->  Barycentric frequency at the epoch of the observation: %.14f Hz" % (key, dict_freqs_to_zap[key]))
                         print()
 
+list_segments_to_remove = []
 for seg in config.list_segments_nofull:
-        if (np.float64(seg)*60) > config.list_Observations[0].T_obs_s:
-                print("Segment %d minutes > length of obs (%d minutes)" % (np.float64(seg), config.list_Observations[0].T_obs_s/60.))
-                config.list_segments_nofull.remove(seg)
-                config.list_segments.remove(seg)
+        if (np.float64(seg)*60) >= config.list_Observations[0].T_obs_s:
+                print("%sWARNING%s: Segment %sm is longer than the length of the full observation (%d minutes). Will be ignored." % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, seg, config.list_Observations[0].T_obs_s / 60.) )
+                list_segments_to_remove.append(seg)
+        elif (np.float64(seg)*60) >= 0.80 * config.list_Observations[0].T_obs_s:
+                print("%sWARNING%s: Segment %sm is more than 80%% of the length of the full observation (%d minutes). Will be ignored." % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, seg, config.list_Observations[0].T_obs_s / 60.) )
+                list_segments_to_remove.append(seg)
 
+#Remove large segments
+for seg in list_segments_to_remove:
+        config.list_segments_nofull.remove(seg)
+        config.list_segments.remove(seg)
 
 if verbosity_level >= 2:
         config.print_configuration()
@@ -2667,13 +2674,14 @@ for i in range(len(config.list_Observations)):
                         segment_length_min  = np.float64(s)
                         segment_length_s = np.float64(s) * 60
                         segment_label = "%dm" % (segment_length_min)
+                        
                 config.dict_search_structure[config.list_Observations[i].file_basename][segment_label] = {}
 
                 N_chunks = int(config.list_Observations[i].T_obs_s / segment_length_s)
                 fraction_left = (config.list_Observations[i].T_obs_s % segment_length_s) / segment_length_s
                 if fraction_left >= 0.80:
                         N_chunks = N_chunks + 1
-
+                                
                 for ck in range(N_chunks):
                         chunk_label = "ck%02d" % (ck)
                         config.dict_search_structure[config.list_Observations[i].file_basename][segment_label][chunk_label] = {'candidates': []}
@@ -2686,6 +2694,7 @@ for i in range(len(config.list_Observations)):
                         print("--> %sWARNING:%s Last chunk (ck%02d) of segment '%sm' is only %d minutes and will be ignored!" % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, ck+1, s, fraction_left*segment_length_min))
                 else:
                         print()
+
 
                 
 if verbosity_level >= 1:
