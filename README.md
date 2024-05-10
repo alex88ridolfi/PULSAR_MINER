@@ -16,9 +16,11 @@ PULSAR_MINER runs all the PRESTO routines in a consistent, efficient, and fully 
 
 ## Requirements
 
+**WARNING**: PULSAR_MINER is not yet compatible with PRESTO 5.0.0 or higher. An updated version compatible with the latest PRESTO version will be released soon.
+
 At minimum, PULSAR_MINER requires:
 - [*crucial*] Python 3.8 or newer with the [Numpy](https://numpy.org/) library
-- [*crucial*] [PRESTO 3.0](https://github.com/scottransom/presto) or newer
+- [*crucial*] [PRESTO 3.0](https://github.com/scottransom/presto/releases/tag/v3.0.1) or [PRESTO 4.0](https://github.com/scottransom/presto/releases/tag/v4.0)
 - [*crucial*] the PRESTO Python3 libraries
 
 
