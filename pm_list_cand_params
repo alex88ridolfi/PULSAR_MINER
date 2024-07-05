@@ -56,7 +56,7 @@ else:
 N_bestprof = len(list_bestprof)
 
 
-print("%90s %20s %20s %14s %15s %15s %10s %12s" % ("File name", "Epoch_bary", "P_bary (ms)", "P_dot", "DM (pc cm-3)", "Acc (m/s^2)", "zmax", "Length (s)"))
+print("%90s %20s %20s %14s %15s %15s %15s %10s %12s" % ("File name", "Epoch_bary", "P_bary (ms)", "P_dot", "P_ddot", "DM (pc cm-3)", "Acc (m/s^2)", "zmax", "Length (s)"))
 for k in range(N_bestprof):
 
        bestprof_filename = list_bestprof[k]
@@ -64,6 +64,9 @@ for k in range(N_bestprof):
 
        P_bary_ms = np.float64(dict_bestprof['P_bary (ms)'])
        P_dot = np.float64(dict_bestprof["P'_bary (s/s)"].split("+/-")[0])
+       P_dot_err = np.float64(dict_bestprof["P'_bary (s/s)"].split("+/-")[1])
+       P_ddot = np.float64(dict_bestprof["P''_bary (s/s^2)"].split("+/-")[0])
+       P_ddot_err = np.float64(dict_bestprof["P''_bary (s/s^2)"].split("+/-")[1])
        nsamples = int(dict_bestprof["Data Folded"])
        T_sample = np.float64((dict_bestprof["T_sample"]))
        Epoch_bary = np.float64((dict_bestprof["Epoch_bary (MJD)"]))
@@ -79,8 +82,13 @@ for k in range(N_bestprof):
        except:
               zmax = -1
 
+       if P_dot / P_dot_err < 3 :
+              P_dot = 0
+       if P_ddot / P_ddot_err < 3 :
+              P_ddot = 0
+              
        accel_ms2 = calculate_acceleration_in_cm_s2_from_F0_and_F1(P_bary_ms / 1000, P_dot)/100.
        if flag_use_tabs == 1:
-              print("%-90s %20.14f %20.15f %14.5e %15.3f %15.3f %10d %12d"   % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, DM, accel_ms2, zmax, chunk_length_s))
+              print("%-90s %20.14f %20.15f %15.3e %14.3e %15.3f %15.3f %10d %12d"   % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, P_ddot, DM, accel_ms2, zmax, chunk_length_s))
        else:
-              print("%s %.15f %.15f %.5e %.3f %.3f %d %d"   % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, DM, accel_ms2, zmax, chunk_length_s))
+              print("%s %.15f %.15f  %.3e %.3e %.3f %.3f %d %d"              % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, P_ddot, DM, accel_ms2, zmax, chunk_length_s))
