@@ -82,9 +82,10 @@ for k in range(N_bestprof):
        except:
               zmax = -1
 
-       if P_dot / P_dot_err < 3 :
+
+       if np.fabs(P_dot / P_dot_err) < 3 :
               P_dot = 0
-       if P_ddot / P_ddot_err < 3 :
+       if np.fabs(P_ddot / P_ddot_err) < 3 :
               P_ddot = 0
               
        accel_ms2 = calculate_acceleration_in_cm_s2_from_F0_and_F1(P_bary_ms / 1000, P_dot)/100.
