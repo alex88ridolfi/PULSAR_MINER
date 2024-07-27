@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (10May2024)"
-string_version = "10May2024"
-number_version = 20240510.2
+string_version_full = "2.0-beta (27Jul2024)"
+string_version = "27Jul2024"
+number_version = 20240727.0
 
 class colors:
     HEADER = '\033[95m'
@@ -939,6 +939,8 @@ def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags=""
                 print("END ACCELSEARCH ---------------------------------------------------------------------- ")
 
 
+
+
 def jerksearch(infile, work_dir, log_abspath, numharm=4, zmax=50, wmax=150, other_flags="", dict_env={}, verbosity_level=0, flag_LOG_append=1):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
@@ -1086,6 +1088,69 @@ def check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerkse
 
         return True
 
+
+def singlepulse_search(work_dir, log_dir, LOG_basename, list_files_to_search, singlepulse_search_flags, num_simultaneous_singlepulse_searches, presto_env=os.environ['PRESTO'], verbosity_level=1, flag_singlepulse_search=1):
+        if verbosity_level >= 2:
+                print()
+                print("BEGIN SINGLE PULSE SEARCH ----------------------------------------------------------------------")
+
+        N_files_to_search = len(list_files_to_search)
+
+        log_abspath = os.path.join(log_dir, LOG_basename+".txt")
+        dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
+        if num_simultaneous_singlepulse_searches == 1:
+                for i in range(N_files_to_search):
+                        dat_file = list_files_to_search[i]
+                        cmd_singlepulse_search = "single_pulse_search.py --noplot %s %s" % (singlepulse_search_flags, dat_file)
+                        print("Running '%s'... " % cmd_singlepulse_search, end=""); sys.stdout.flush()
+                        execute_and_log(cmd_singlepulse_search, work_dir, log_abspath, dict_env, 0)
+                        print("done!"); sys.stdout.flush()
+        elif num_simultaneous_singlepulse_searches >= 2 and flag_singlepulse_search == 1:
+                list_singlepulse_search_commands = []
+                list_singlepulse_search_workdirs = []
+                
+                print("\nSingle-pulse search with multiple CPUs active")
+
+                for i in range(N_files_to_search):
+                        print()
+                        if verbosity_level >= 2:
+                                print("singlepulse_search: inside loop with i = %d / %d" % (i, N_files_to_search-1))
+                        dat_file = list_files_to_search[i]
+                        dat_file_nameonly = os.path.basename(dat_file)
+                        
+                        #DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax)
+
+
+                        
+                        cmd_singlepulse_search = "single_pulse_search.py --noplot %s %s" % (singlepulse_search_flags, dat_file)
+                        list_singlepulse_search_commands.append(cmd_singlepulse_search)
+                        list_singlepulse_search_workdirs.append(work_dir)
+                print()
+
+
+                TP = ThreadPool(num_simultaneous_singlepulse_searches)
+                N_commands = len(list_singlepulse_search_commands)
+                print()
+                print("Now doing parallelized single-pulse search using %d CPUs..." % num_simultaneous_singlepulse_searches);  sys.stdout.flush()
+                print()
+                for k in range(len(list_singlepulse_search_commands)):
+                        print("Queing single-pulse search command #%d: '%s'" % (k+1, list_singlepulse_search_commands[k]))
+                        time.sleep(0.1)
+                        TP.apply_async(execute_and_log_in_thread_pool, (list_singlepulse_search_commands[k], log_dir, list_singlepulse_search_workdirs[k], k, N_commands, 1) )
+                print("\n")
+                print("Running %d single-pulse search commands at once..." % (num_simultaneous_singlepulse_searches)); sys.stdout.flush()
+                TP.close()
+                TP.join()
+                print()
+                print("%d commands completed!" % (len(list_singlepulse_search_commands)))
+
+
+        print("Making final single-pulse plot with 'single_pulse_search.py *.singlepulse'..."); sys.stdout.flush()
+        os.system('single_pulse_search.py *.singlepulse')
+        print("done!"); sys.stdout.flush()
+
+
+        
 
 def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_label, chunk_label, list_seg_ck_indices, list_DD_scheme, flag_use_cuda=0, list_cuda_ids=[0], flag_acceleration_search=1, numharm=8, list_zmax=[20], flag_jerk_search=1, jerksearch_zmax=0, jerksearch_wmax=0, jerksearch_numharm=4, num_simultaneous_jerksearches=1, period_to_search_min_s=0.001, period_to_search_max_s=20.0, other_flags_accelsearch="", flag_remove_fftfiles=0, flag_remove_datfiles_of_segments=0, presto_env_zmax_0=os.environ['PRESTO'], presto_env_zmax_any=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=1, dict_flag_steps= {'flag_step_dedisperse': 1 , 'flag_step_realfft': 1, 'flag_step_periodicity_search': 1}):
 
@@ -2042,7 +2107,7 @@ class SurveyConfiguration(object):
                 self.config_filename = config_filename
                 self.list_datafiles = []
 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'DATA_TYPE', 'ROOT_WORKDIR', 'PRESTO', 'PRESTO_GPU', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'RFIFIND_TIME', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'ZAP_ISOLATED_PULSARS_FROM_FFTS', 'ZAP_ISOLATED_PULSARS_MAX_HARM', 'FLAG_ACCELERATION_SEARCH', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'FLAG_JERK_SEARCH', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'ACCELSEARCH_JERK_FLAGS', 'PREPFOLD_FLAGS', 'USE_CUDA', 'CUDA_IDS', 'NUM_SIMULTANEOUS_JERKSEARCHES', 'NUM_SIMULTANEOUS_PREPFOLDS', 'NUM_SIMULTANEOUS_PREPSUBBANDS', 'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'DATA_TYPE', 'ROOT_WORKDIR', 'PRESTO', 'PRESTO_GPU', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'RFIFIND_TIME', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'ZAP_ISOLATED_PULSARS_FROM_FFTS', 'ZAP_ISOLATED_PULSARS_MAX_HARM', 'FLAG_ACCELERATION_SEARCH', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'FLAG_JERK_SEARCH', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'ACCELSEARCH_JERK_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_SINGLEPULSE_SEARCH', 'SINGLEPULSE_SEARCH_FLAGS', 'USE_CUDA', 'CUDA_IDS', 'NUM_SIMULTANEOUS_JERKSEARCHES', 'NUM_SIMULTANEOUS_PREPFOLDS', 'NUM_SIMULTANEOUS_PREPSUBBANDS', 'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING', 'STEP_SINGLEPULSE_SEARCH']
 
                 self.dict_survey_configuration = {}
 
@@ -2119,13 +2184,17 @@ class SurveyConfiguration(object):
                         elif key == "ACCELSEARCH_JERK_FLAGS":               self.accelsearch_jerk_flags                = self.dict_survey_configuration[key]
                         elif key == "PREPFOLD_FLAGS":                       self.prepfold_flags                        = self.dict_survey_configuration[key]
 
+                        elif key == "FLAG_SINGLEPULSE_SEARCH":              self.flag_singlepulse_search               = int(self.dict_survey_configuration[key])
+                        elif key == "SINGLEPULSE_SEARCH_FLAGS":             self.singlepulse_search_flags              = self.dict_survey_configuration[key]
+
                         elif key == "USE_CUDA":                             self.flag_use_cuda                         = int(self.dict_survey_configuration[key])
                         elif key == "CUDA_IDS":                             self.list_cuda_ids                         = [int(x) for x in self.dict_survey_configuration[key].split(",")]
 
-                        elif key == "NUM_SIMULTANEOUS_JERKSEARCHES":        self.num_simultaneous_jerksearches         = int(self.dict_survey_configuration[key])
-                        elif key == "NUM_SIMULTANEOUS_PREPFOLDS":           self.num_simultaneous_prepfolds            = int(self.dict_survey_configuration[key])
-                        elif key == "NUM_SIMULTANEOUS_PREPSUBBANDS":        self.num_simultaneous_prepsubbands         = int(self.dict_survey_configuration[key])
-                        elif key == "MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND": self.max_simultaneous_dms_per_prepsubband  = int(self.dict_survey_configuration[key])
+                        elif key == "NUM_SIMULTANEOUS_JERKSEARCHES":           self.num_simultaneous_jerksearches           = int(self.dict_survey_configuration[key])
+                        elif key == "NUM_SIMULTANEOUS_PREPFOLDS":              self.num_simultaneous_prepfolds              = int(self.dict_survey_configuration[key])
+                        elif key == "NUM_SIMULTANEOUS_PREPSUBBANDS":           self.num_simultaneous_prepsubbands           = int(self.dict_survey_configuration[key])
+                        elif key == "NUM_SIMULTANEOUS_SINGLEPULSE_SEARCHES":   self.num_simultaneous_singlepulse_searches   = int(self.dict_survey_configuration[key])
+                        elif key == "MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND":    self.max_simultaneous_dms_per_prepsubband    = int(self.dict_survey_configuration[key])
 
                         elif key == "FAST_BUFFER_DIR":                      self.fast_buffer_dir                       = self.dict_survey_configuration[key]
                         elif key == "FLAG_KEEP_DATA_IN_BUFFER_DIR":         self.flag_keep_data_in_buffer_dir          = int(self.dict_survey_configuration[key])
@@ -2139,6 +2208,7 @@ class SurveyConfiguration(object):
                         elif key == "STEP_PERIODICITY_SEARCH":              self.flag_step_periodicity_search          = int(self.dict_survey_configuration[key])
                         elif key == "STEP_SIFTING":                         self.flag_step_sifting                     = int(self.dict_survey_configuration[key])
                         elif key == "STEP_FOLDING":                         self.flag_step_folding                     = int(self.dict_survey_configuration[key])
+                        elif key == "STEP_SINGLEPULSE_SEARCH":              self.flag_step_singlepulse_search          = int(self.dict_survey_configuration[key])
 
 
                 config_file.close()
@@ -2269,12 +2339,15 @@ def init_default(observation_filename):
                                                     'ACCELSEARCH_GPU_FLAGS':                 "\"\"                     # Any additional options to give to ACCELSEARCH when doing acceleration search with PRESTO_ON_GPU",
                                                     'ACCELSEARCH_JERK_FLAGS':                "\"\"                     # Any additional options to give to ACCELSEARCH when doing jerk search",
                                                     'PREPFOLD_FLAGS':                        "\"-ncpus %-3d -n 64\"     # Any additional options to give to PREPFOLD" % (multiprocessing.cpu_count()/4),
+                                                    'FLAG_SINGLEPULSE_SEARCH':               "1                      # Perform single-pulse search? (1=yes, 0=no)",
+                                                    'SINGLEPULSE_SEARCH_FLAGS':              "\"\"                   # Any additional options to give to SINGLE_PULSE_SEARCH.py when doing single-pulse search",
                                                     'USE_CUDA':                              "%s                      # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,
                                                     'CUDA_IDS':                              "0                      # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",
                                                     'NUM_SIMULTANEOUS_JERKSEARCHES':         "%-4d                   # Number of jerk search instances to run at once" % (multiprocessing.cpu_count()),
                                                     'NUM_SIMULTANEOUS_PREPFOLDS':            "4                      # Max number of prepfold instances to run at once",
                                                     'NUM_SIMULTANEOUS_PREPSUBBANDS':         "%-4d                   # Maximum number of prepsubband instances to run at once" % (multiprocessing.cpu_count()/4),
                                                     'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND':  "1000                   # Number of simultaneous DM values processed at once by prepsubband (max 1000) ",
+                                                    'NUM_SIMULTANEOUS_SINGLEPULSE_SEARCHES': "%-4d                   # Number of single-pulse search instances to run at once" % (multiprocessing.cpu_count()),
                                                     'FAST_BUFFER_DIR':                       "\"\"                     # Path of a SSD/Fast memory buffer (minimizes I/O bottlenecks, optional)",
                                                     'FLAG_KEEP_DATA_IN_BUFFER_DIR':          "0                      # Keep copy of observation in buffer after searching? (1=yes, 0=no)",
                                                     'FLAG_REMOVE_FFTFILES':                  "1                      # Remove FFT files after searching to save disk space? (1=yes, 0=no)",
@@ -2285,7 +2358,8 @@ def init_default(observation_filename):
                                                     'STEP_REALFFT':                          "1                      # Run the REALFFT step? (1=yes, 0=no)",
                                                     'STEP_PERIODICITY_SEARCH':               "1                      # Run the PERIODICITY SEARCH step? (1=yes, 0=no)",
                                                     'STEP_SIFTING':                          "1                      # Run the SIFTING step? (1=yes, 0=no)",
-                                                    'STEP_FOLDING':                          "1                      # Run the FOLDING step? (1=yes, 0=no)"
+                                                    'STEP_FOLDING':                          "1                      # Run the FOLDING step? (1=yes, 0=no)",
+                                                    'STEP_SINGLEPULSE_SEARCH':               "1                      # Run the SINGLEPULSE SEARCH step? (1=yes, 0=no)"
                                                     }
 
         default_cfg_filename = "%s.cfg" % (os.path.basename(os.getcwd()))
@@ -2361,6 +2435,12 @@ def init_default(observation_filename):
                 f.write("%-40s %s\n" % ('PREPFOLD_FLAGS', dict_survey_configuration_default_values['PREPFOLD_FLAGS']))
                 f.write("\n")
                 f.write("#===============================================================\n")
+                f.write("# Single pulse search with PRESTO\n")
+                f.write("#===============================================================\n")
+                f.write("%-40s %s\n" % ('FLAG_SINGLEPULSE_SEARCH', dict_survey_configuration_default_values['FLAG_SINGLEPULSE_SEARCH']))
+                f.write("%-40s %s\n" % ('SINGLEPULSE_SEARCH_FLAGS', dict_survey_configuration_default_values['SINGLEPULSE_SEARCH_FLAGS']))
+                f.write("\n")
+                f.write("#===============================================================\n")
                 f.write("# Computational/Performance parameters\n")
                 f.write("#===============================================================\n")
                 f.write("%-40s %s\n" % ('USE_CUDA', dict_survey_configuration_default_values['USE_CUDA']))
@@ -2370,6 +2450,7 @@ def init_default(observation_filename):
                 f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_PREPFOLDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_PREPFOLDS']))
                 f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_PREPSUBBANDS', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_PREPSUBBANDS']))
                 f.write("%-40s %s\n" % ('MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', dict_survey_configuration_default_values['MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND']))
+                f.write("%-40s %s\n" % ('NUM_SIMULTANEOUS_SINGLEPULSE_SEARCHES', dict_survey_configuration_default_values['NUM_SIMULTANEOUS_SINGLEPULSE_SEARCHES']))
                 f.write("\n")
                 f.write("%-40s %s\n" % ('FAST_BUFFER_DIR', dict_survey_configuration_default_values['FAST_BUFFER_DIR']))
                 f.write("%-40s %s\n" % ('FLAG_KEEP_DATA_IN_BUFFER_DIR', dict_survey_configuration_default_values['FLAG_KEEP_DATA_IN_BUFFER_DIR'])) 
@@ -2386,6 +2467,7 @@ def init_default(observation_filename):
                 f.write("%-40s %s\n" % ('STEP_PERIODICITY_SEARCH', dict_survey_configuration_default_values['STEP_PERIODICITY_SEARCH']))
                 f.write("%-40s %s\n" % ('STEP_SIFTING', dict_survey_configuration_default_values['STEP_SIFTING']))
                 f.write("%-40s %s\n" % ('STEP_FOLDING', dict_survey_configuration_default_values['STEP_FOLDING']))
+                f.write("%-40s %s\n" % ('STEP_SINGLEPULSE_SEARCH', dict_survey_configuration_default_values['STEP_SINGLEPULSE_SEARCH']))
                 f.write("\n")
                 f.write("#===============================================================\n")
                 f.write("# Configuration file made with PULSAR_MINER version %s\n" % string_version_full)
@@ -3435,15 +3517,83 @@ if config.flag_step_folding == 1:
                 print("%s" % cmd_pm_run_multithread)
                 os.system(cmd_pm_run_multithread)
 
-                if config.list_Observations[i].file_buffer_copy != "":
-                        if config.flag_keep_data_in_buffer_dir == 1:
-                                print()
-                                print("Keeping a copy of '%s' from the buffer directory (%s)." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir))
-                                print("Remember to delete if you are not using it further.")
-                        else:
-                                print("Removing copy of '%s' from the buffer directory (%s)..." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir), end=""), ; sys.stdout.flush()
-                                os.remove(config.list_Observations[i].file_buffer_copy)
-                                print("done!")
 
+
+
+
+if config.flag_singlepulse_search == 1 and config.flag_step_singlepulse_search == 1:
+        print()
+        print()
+        print("##################################################################################################")
+        print("#                                        STEP 6 - SINGLE-PULSE SEARCH (PRESTO) ")
+        print("##################################################################################################")
+        print()
+
+        dir_singlepulse_search = os.path.join(config.root_workdir, "06_SINGLEPULSE")
+        if verbosity_level >= 1:
+                print("6) SINGLE-PULSE SEARCH: Creating working directories...", end=' '); sys.stdout.flush()
+        if not os.path.exists(dir_singlepulse_search):
+                os.mkdir(dir_singlepulse_search)
+
+        for i in range(len(config.list_Observations)):
+                obs = config.list_Observations[i].file_basename
+                time.sleep(1.0)
+                work_dir_singlepulse_search_obs = os.path.join(dir_singlepulse_search, config.list_Observations[i].file_basename)
+                if verbosity_level >= 2:
+                        print("6) SINGLE-PULSE SEARCH: Creating working directory '%s'..." % (work_dir_singlepulse_search_obs), end=' '); sys.stdout.flush()
+                if not os.path.exists(work_dir_singlepulse_search_obs):
+                        os.mkdir(work_dir_singlepulse_search_obs)
+                if verbosity_level >= 2:
+                        print("done!"); sys.stdout.flush()
+
+        if verbosity_level >= 1:
+                print("done!")
+
+
+
+        # Go into the 06_SINGLEPULSE directory
+        os.chdir(work_dir_singlepulse_search_obs)
+
+        # Create symbolic links to all the full-length *.dat and corresponding *.inf files
+        search_string_datfiles_full_length = "%s/03_DEDISPERSION/%s/full/ck00/*.dat" % (config.root_workdir, config.list_Observations[0].file_basename) #List of datfiles
+        search_string_inffiles_full_length = "%s/03_DEDISPERSION/%s/full/ck00/*.inf" % (config.root_workdir, config.list_Observations[0].file_basename) #List of inffiles
+        list_datfiles_full_length = glob.glob(search_string_datfiles_full_length)
+        list_inffiles_full_length = glob.glob(search_string_inffiles_full_length)
+
+        for f in list_datfiles_full_length + list_inffiles_full_length:
+                symlink_filename = os.path.basename(f)
+                if os.path.exists(symlink_filename) and os.path.islink(symlink_filename):
+                        print("Symlink %s already exists. Skipping..." % (symlink_filename))
+                else:
+                        print("Making symbolic link of '%s'..." % (symlink_filename), end=''); sys.stdout.flush()
+                        os.symlink(f, symlink_filename)
+                        print("done!"); sys.stdout.flush()
+
+        LOG_singlepulse_search_basename = "06_singlepulse_search_%s" % (config.list_Observations[0].file_basename)
+        LOG_singlepulse_search_abspath  = "%s/LOG_%s.txt" % (LOG_dir, LOG_singlepulse_search_basename)
+        
+        list_datfiles_to_singlepulse_search = glob.glob("%s/*.dat" % work_dir_singlepulse_search_obs)
+
+
+        singlepulse_search(work_dir_singlepulse_search_obs,
+                           LOG_dir,
+                           LOG_singlepulse_search_basename,
+                           list_datfiles_to_singlepulse_search,
+                           config.singlepulse_search_flags,
+                           config.num_simultaneous_singlepulse_searches,
+                           config.presto_env,
+                           verbosity_level,
+                           config.flag_step_singlepulse_search)
+
+                
+if config.list_Observations[i].file_buffer_copy != "":
+        if config.flag_keep_data_in_buffer_dir == 1:
+                print()
+                print("Keeping a copy of '%s' from the buffer directory (%s)." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir))
+                print("Remember to delete if you are not using it further.")
+        else:
+                print("Removing copy of '%s' from the buffer directory (%s)..." % (config.list_Observations[i].file_nameonly, config.fast_buffer_dir), end=""), ; sys.stdout.flush()
+                os.remove(config.list_Observations[i].file_buffer_copy)
+                print("done!")
 
 print()
