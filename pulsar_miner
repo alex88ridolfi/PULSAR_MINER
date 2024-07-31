@@ -32,7 +32,7 @@ warnings.simplefilter('ignore', UserWarning)
 
 string_version_full = "2.0-beta (31Jul2024)"
 string_version = "31Jul2024"
-number_version = 20240731.0
+number_version = 20240731.1
 
 class colors:
     HEADER = '\033[95m'
@@ -983,36 +983,56 @@ def jerksearch(infile, work_dir, log_abspath, numharm=4, zmax=50, wmax=150, othe
                 print("END JERKSEARCH ---------------------------------------------------------------------- ")
 
 
-def split_into_chunks(infile, list_datfiles_to_split, log_dir, LOG_basename,  work_dir, segment_min, i_chunk, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=0 ):
+def split_into_chunks(infile, list_datfiles_to_split, log_dir, LOG_basename,  work_dir, segment_min, i_chunk, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=0, verbosity_level=1):
         segment_length_s = segment_min * 60
         dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
 
         log_abspath = "%s/LOG_%s.txt" % (log_dir, LOG_basename)
 
         observation_filename = os.path.basename(infile)
-        observation_basename = os.path.splitext(observation_filename)[0]
+        observation_nameonly = os.path.splitext(observation_filename)[0]
         
         str_seg = int(segment_min)
         for datfile_name in sorted(list_datfiles_to_split):
                 datfile_nameonly = os.path.basename(datfile_name)               # myfile_DM24.40.dat
+                datfile_dirname  = os.path.dirname(datfile_name)
                 inffile_name = datfile_name.replace(".dat", ".inf")             # myfile_DM24.40.inf
                 str_DM = datfile_nameonly.split(".dat")[0].split("DM")[-1]      # 24.40
                 
                 info_datfile = infodata.infodata(inffile_name)
 
                 
-                datfile_chunk_name = "%s/%s_%sm_ck%02d_DM%s.dat" % (work_dir, observation_basename, str_seg, i_chunk, str_DM)
-                #print("split_into_chunks:: datfile_chunk_name = ", datfile_chunk_name)
-                DM_trial_was_searched = check_if_DM_trial_was_searched(datfile_chunk_name, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax)
-                #print("split_into_chunks:: DM_trial_was_searched = ", DM_trial_was_searched)
+                datfile_chunk_name = "%s/%s_%sm_ck%02d_DM%s.dat" % (work_dir, observation_nameonly, str_seg, i_chunk, str_DM)
+
+                DM_trial_was_searched = check_if_DM_trial_was_searched(datfile_chunk_name, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, verbosity_level)
+
                 
                 string_min = "%dm" % int(segment_min)
                 string_chunk = "ck%02d" % i_chunk
-                path_old = os.path.splitext(datfile_name)[0]
-                path_new = path_old.replace("full", string_min).replace("ck00", string_chunk)
-                new_outfile_name = "%s" % (os.path.basename(path_new))
+                #path_old = os.path.splitext(datfile_name)[0]
+                #path_new = path_old.replace("full", string_min).replace("ck00", string_chunk)
 
 
+                old_suffixes =  datfile_nameonly.split(observation_nameonly)[-1]
+                new_suffixes =  old_suffixes.replace("full", string_min).replace("ck00", string_chunk)
+                new_datfile_name = observation_nameonly + new_suffixes    #with extension
+                
+                new_outfile_name = os.path.splitext(new_datfile_name)[0]
+
+                if verbosity_level >= 2:
+                        print("split_into_chunks:: datfile_nameonly: ", datfile_nameonly)
+                        print("split_into_chunks:: datfile_dirname: ", datfile_dirname)
+                        print("split_into_chunks:: inffile_name: ", inffile_name)
+                        print("split_into_chunks:: str_DM: ", str_DM)
+                        print("split_into_chunks:: info_datfile: ", info_datfile)
+                        print("split_into_chunks:: datfile_chunk_name: ", datfile_chunk_name)
+                        print("split_into_chunks:: DM_trial_was_searched: ", DM_trial_was_searched)
+                        print("split_into_chunks:: old_suffixes: ", old_suffixes)
+                        print("split_into_chunks:: new_suffixes: ", new_suffixes)
+                        print("split_into_chunks:: new_datfile_name: ", new_datfile_name)
+                        print("split_into_chunks:: new_outfile_name: ", new_outfile_name)
+                        
+                
                 if DM_trial_was_searched == False:
                         t_samp_s = info_datfile.dt
                         N_samp = info_datfile.N
@@ -1046,28 +1066,40 @@ def split_into_chunks(infile, list_datfiles_to_split, log_dir, LOG_basename,  wo
 
 
                                 
-def check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax):
+def check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, verbosity_level=1):
         dat_file_nameonly = os.path.basename(dat_file)
         fft_file = dat_file.replace(".dat", ".fft")
         fft_file_nameonly = os.path.basename(fft_file)
 
+        if verbosity_level >= 2:
+                print("check_if_DM_trial_was_searched:: list_zmax = %s" % list_zmax)
+                print("check_if_DM_trial_was_searched:: flag_jerk_search = %s" % flag_jerk_search)
+                print("check_if_DM_trial_was_searched:: jerksearch_zmax = %s, jerksearch_wmax = %s" % (jerksearch_zmax,jerksearch_wmax))
+                
         for z in list_zmax:
                 ACCEL_filename          = dat_file.replace(".dat", "_ACCEL_%s" % (int(z)))
                 ACCEL_filename_empty = dat_file.replace(".dat", "_ACCEL_%s_empty" % (int(z)))
                 ACCEL_cand_filename = ACCEL_filename + ".cand"
                 ACCEL_txtcand_filename = ACCEL_filename + ".txtcand"
 
-                #print("check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename))
-                #print("check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename_empty, ACCEL_cand_filename, ACCEL_txtcand_filename))
+                if verbosity_level >= 2:
+                        print("check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename))
+                        print("check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename_empty, ACCEL_cand_filename, ACCEL_txtcand_filename))
 
                 
                 if (not os.path.exists(ACCEL_filename)       or os.path.getsize(ACCEL_filename) ==0        ) and \
                    (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty) ==0  ):
+                        if verbosity_level >= 2:
+                                print("check_if_DM_trial_was_searched:: False - case 1")
                         return False
                 if (not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename) ==0) and \
                    (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty) ==0  ):
+                        if verbosity_level >= 2:
+                                print("check_if_DM_trial_was_searched:: False - case 2")
                         return False
                 if not os.path.exists(ACCEL_txtcand_filename):
+                        if verbosity_level >= 2:
+                                print("check_if_DM_trial_was_searched:: False - case 3")
                         return False
 
         if flag_jerk_search == 1 and jerksearch_wmax > 0:
@@ -1078,11 +1110,17 @@ def check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerkse
                 # print "check_if_DM_trial_was_searched:: checking: %s, %s, %s" % (ACCEL_filename, ACCEL_cand_filename, ACCEL_txtcand_filename)
                 if (not os.path.exists(ACCEL_filename)       or os.path.getsize(ACCEL_filename) ==0        ) and \
                    (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty) ==0  ):
+                        if verbosity_level >= 2:
+                                print("check_if_DM_trial_was_searched:: False - case 4")
                         return False
                 if (not os.path.exists(ACCEL_cand_filename) or os.path.getsize(ACCEL_cand_filename) ==0) and \
                    (not os.path.exists(ACCEL_filename_empty) or os.path.getsize(ACCEL_filename_empty) ==0  ):
+                        if verbosity_level >= 2:
+                                print("check_if_DM_trial_was_searched:: False - case 5")
                         return False
                 if not os.path.exists(ACCEL_txtcand_filename):
+                        if verbosity_level >= 2:
+                                print("check_if_DM_trial_was_searched:: False - case 6")
                         return False
 
         return True
@@ -1117,7 +1155,7 @@ def singlepulse_search(work_dir, log_dir, LOG_basename, list_files_to_search, si
                         dat_file = list_files_to_search[i]
                         dat_file_nameonly = os.path.basename(dat_file)
                         
-                        #DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax)
+                        #DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, verbosity_level)
 
 
                         
@@ -1205,7 +1243,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                         fft_file = dat_file.replace(".dat", ".fft")
                         fft_file_nameonly = os.path.basename(fft_file)
 
-                        DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax)
+                        DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, verbosity_level)
                         #print("periodicity_search_FFT:: DM_trial_was_searched = ", DM_trial_was_searched)
                         
                         if dict_flag_steps['flag_step_realfft'] == 1:
@@ -1239,7 +1277,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                                         print("done!")
                                         sys.stdout.flush()
                                 else:
-                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, dat_file_nameonly), end=' '); sys.stdout.flush()
+                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - File '%s' was already successfully searched. Skipping..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, dat_file_nameonly)); sys.stdout.flush()
                                         
                         else:
                                 print("STEP_REALFFT = 0, skipping realfft, rednoise, zapbirds...")
@@ -1328,7 +1366,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                         fft_file = dat_file.replace(".dat", ".fft")
                         fft_file_nameonly = os.path.basename(fft_file)
 
-                        DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax)
+                        DM_trial_was_searched = check_if_DM_trial_was_searched(dat_file, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, verbosity_level)
 
                         if dict_flag_steps['flag_step_realfft'] == 1:
 
@@ -2086,7 +2124,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
 
                         segment_min = np.float64(segment_label.replace("m", ""))
                         i_chunk = int(chunk_label.replace("ck", ""))
-                        split_into_chunks(infile, list_datfiles_to_split, log_dir, LOG_basename, out_dir, segment_min, i_chunk, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=flag_remove_datfiles_of_segments)
+                        split_into_chunks(infile, list_datfiles_to_split, log_dir, LOG_basename, out_dir, segment_min, i_chunk, list_zmax, flag_jerk_search, jerksearch_zmax, jerksearch_wmax, presto_env=os.environ['PRESTO'], flag_LOG_append=1, flag_remove_datfiles_of_segments=flag_remove_datfiles_of_segments, verbosity_level=verbosity_level)
 
                 if verbosity_level >= 2:
                         print("dedisperse_rednoise_and_periodicity_search_FFT:: launching periodicity_search_FFT")
