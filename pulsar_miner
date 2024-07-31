@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (27Jul2024)"
-string_version = "27Jul2024"
-number_version = 20240727.0
+string_version_full = "2.0-beta (31Jul2024)"
+string_version = "31Jul2024"
+number_version = 20240731.0
 
 class colors:
     HEADER = '\033[95m'
