@@ -523,8 +523,7 @@ def execute_and_log_in_thread_pool(command, log_dir, work_dir, id_num, N_ids, fl
        log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
        log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
        log_file.close()
-       print("Command %4d/%d complete. " % (id_num+1, N_ids)); sys.stdout.flush()
-
+       print("Command %4d/%d ('%s') complete." % (id_num+1, N_ids, command_label)); sys.stdout.flush()
 
 def execute_and_log(command, work_dir, log_abspath, dict_envs={}, flag_append=0, verbosity_level=0):
         datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
@@ -1145,7 +1144,7 @@ def singlepulse_search(work_dir, log_dir, LOG_basename, list_files_to_search, si
                 print("%d commands completed!" % (len(list_singlepulse_search_commands)))
 
 
-        print("Making final single-pulse plot with 'single_pulse_search.py *.singlepulse'..."); sys.stdout.flush()
+        print("Making final single-pulse plot with 'single_pulse_search.py *.singlepulse'...", end=''); sys.stdout.flush()
         os.system('single_pulse_search.py *.singlepulse')
         print("done!"); sys.stdout.flush()
 
