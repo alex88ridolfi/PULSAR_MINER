@@ -2354,7 +2354,7 @@ def init_default(observation_filename):
                                                     'FLAG_ACCELERATION_SEARCH':              "1                      # Perform acceleration search? (1=yes, 0=no)",
                                                     'ACCELSEARCH_LIST_ZMAX':                 "0,200                  # List (comma-separated) of zmax values to use with PRESTO accelsearch ",
                                                     'ACCELSEARCH_NUMHARM':                   "8                      # Number of harmonics to use for acceleration search",
-                                                    'FLAG_JERK_SEARCH':                      "0                      # Perform acceleration search? (1=yes, 0=no)",
+                                                    'FLAG_JERK_SEARCH':                      "0                      # Perform jerk search? (1=yes, 0=no)",
                                                     'JERKSEARCH_ZMAX':                       "100                    # Zmax value to use for jerk search",
                                                     'JERKSEARCH_WMAX':                       "300                    # Wmax value to use for jerk search (0 = do not do jerk search)",
                                                     'JERKSEARCH_NUMHARM':                    "4                      # Number of harmonics to use for jerk search",
