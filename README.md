@@ -139,7 +139,7 @@ If you effectively used PULSAR_MINER for your work, I would appreciate if you co
 
 ## Acknowledgements
 Over the years, PULSAR_MINER has been used by many people, and their feedback has been extremely valuable.
-Big thanks to Tasha Gautam, Laila Vleeschower Calas, Vishnu Balakrishnan, Weiwei Chen, Rouhin Nag, Federico Abbate, Marta Burgay, Joanna Berteaud, for using the pipeline, reporting bugs, and suggesting improvements.
+Big thanks to Tasha Gautam, Laila Vleeschower Calas, Vishnu Balakrishnan, Weiwei Chen, Rouhin Nag, Federico Abbate, Marta Burgay, Joanna Berteaud, Miquel Colom i Bernadich for using the pipeline, reporting bugs, and suggesting improvements.
 A special thanks to Tasha Gautam for adding the initial support to jerk search.
 
 
