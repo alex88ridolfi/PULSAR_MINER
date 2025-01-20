@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (31Jul2024)"
-string_version = "31Jul2024"
-number_version = 20240731.1
+string_version_full = "2.0-beta (20Jan2025)"
+string_version = "20Jan2025"
+number_version = 20250120.0
 
 class colors:
     HEADER = '\033[95m'
@@ -1405,37 +1405,38 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
 
                         if dict_flag_steps['flag_step_periodicity_search'] == 1:
                                 if DM_trial_was_searched == False:
-                                        for z in list_zmax:
-                                                tstart_accelsearch = time.time()
-                                                print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, z), end=' ')
-                                                sys.stdout.flush()
-                                                if int(z) == 0:
-                                                        dict_env = copy.deepcopy(dict_env_zmax_0)
-                                                        if verbosity_level >= 2:
-                                                                print("accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env))
-                                                        flag_cuda = ""
-                                                else:
-                                                        if flag_use_cuda == 1:
-                                                                dict_env = copy.deepcopy(dict_env_zmax_any)
-                                                                gpu_id = random.choice(list_cuda_ids)
-                                                                flag_cuda = " -cuda %d " % (gpu_id)
-                                                        else:
+                                        if flag_acceleration_search == 1:
+                                                for z in list_zmax:
+                                                        tstart_accelsearch = time.time()
+                                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing accelsearch of %s with zmax = %4d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, z), end=' ')
+                                                        sys.stdout.flush()
+                                                        if int(z) == 0:
                                                                 dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                                if verbosity_level >= 2:
+                                                                        print("accelsearch:: zmax == 0 ----> dict_env = %s" % (dict_env))
                                                                 flag_cuda = ""
+                                                        else:
+                                                                if flag_use_cuda == 1:
+                                                                        dict_env = copy.deepcopy(dict_env_zmax_any)
+                                                                        gpu_id = random.choice(list_cuda_ids)
+                                                                        flag_cuda = " -cuda %d " % (gpu_id)
+                                                                else:
+                                                                        dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                                        flag_cuda = ""
 
-                                                        if verbosity_level >= 2:
-                                                                print("periodicity_search_FFT:: zmax == %d ----> dict_env = %s" % (int(z), dict_env))
-                                                                print("periodicity_search_FFT:: Now check CUDA: list_cuda_ids = ", list_cuda_ids)
-                                                                print("periodicity_search_FFT:: flag_use_cuda = ", flag_use_cuda)
-                                                                print("periodicity_search_FFT:: flag_cuda = ", flag_cuda)
+                                                                if verbosity_level >= 2:
+                                                                        print("periodicity_search_FFT:: zmax == %d ----> dict_env = %s" % (int(z), dict_env))
+                                                                        print("periodicity_search_FFT:: Now check CUDA: list_cuda_ids = ", list_cuda_ids)
+                                                                        print("periodicity_search_FFT:: flag_use_cuda = ", flag_use_cuda)
+                                                                        print("periodicity_search_FFT:: flag_cuda = ", flag_cuda)
 
-                                                accelsearch_flags = other_flags_accelsearch + flag_cuda  # + " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
+                                                        accelsearch_flags = other_flags_accelsearch + flag_cuda  # + " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
 
-                                                accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
-                                                tend_accelsearch = time.time()
-                                                time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
-                                                print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
-                                                ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
+                                                        accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                                        tend_accelsearch = time.time()
+                                                        time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
+                                                        print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
+                                                        ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
 
                                         print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Will do jerk search of %s with zmax=%d, wmax=%d, numharm=%d at the end of the acceleration search of this chunk..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
                                         cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (jerksearch_flags, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, fft_file)
