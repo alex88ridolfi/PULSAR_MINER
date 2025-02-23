@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0-beta (20Jan2025)"
-string_version = "20Jan2025"
-number_version = 20250120.0
+string_version_full = "2.0 (22Feb2025)"
+string_version = "22Feb2025"
+number_version = 20250222.0
 
 class colors:
     HEADER = '\033[95m'
@@ -483,7 +483,7 @@ class Observation(object):
                                 self.Tstart_MJD       = self.MJD_int + np.float64(self.MJD_sec/86400.)
 
 
-def execute_and_log_in_thread_pool(command, log_dir, work_dir, id_num, N_ids, flag_log=1):
+def execute_and_log_in_thread_pool(command, log_dir, work_dir, dict_envs, id_num, N_ids, flag_log=1):
        datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
        datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
        time_start = time.time()
@@ -492,6 +492,14 @@ def execute_and_log_in_thread_pool(command, log_dir, work_dir, id_num, N_ids, fl
        else:
               command_label = command.split()[0]
        list_for_Popen = command.split()
+
+       env_subprocess = os.environ.copy()
+       
+
+       if dict_envs:
+               for k in list(dict_envs.keys()):
+                       env_subprocess[k] = dict_envs[k]
+
 
        for i in range(len(list_for_Popen)):
               current_piece = list_for_Popen[i]
@@ -511,10 +519,10 @@ def execute_and_log_in_thread_pool(command, log_dir, work_dir, id_num, N_ids, fl
                log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
                log_file.write("****************************************************************\n")
                log_file.flush()
-               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
+               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, env=env_subprocess, stdout=log_file, stderr=log_file)
        elif flag_log == 0:
                print("Not logging..")
-               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
+               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, env=env_subprocess, stdout=subprocess.PIPE)
        proc.communicate()
 
        datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
@@ -545,13 +553,13 @@ def execute_and_log(command, work_dir, log_abspath, dict_envs={}, flag_append=0,
 
         list_for_Popen = command.split()
         env_subprocess = os.environ.copy()
-        if dict_envs:  # If the dictionary is not empty                                                                                                                                                            
+        if dict_envs:  # If the dictionary is not empty                            
                 for k in list(dict_envs.keys()):
                         env_subprocess[k] = dict_envs[k]
-
+        
         proc = subprocess.Popen(list_for_Popen, stdout=log_file, stderr=log_file, cwd=work_dir, env=env_subprocess)
-        proc.communicate()  # Wait for the process to complete                                                                                                                                                    
-
+        proc.communicate()  # Wait for the process to complete
+        
         datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
         time_end = time.time()
 
@@ -837,18 +845,20 @@ def check_accelsearch_result(fft_infile, zmax, verbosity_level=0):
         fft_infile_nameonly = os.path.basename(fft_infile)
         fft_infile_basename = os.path.splitext(fft_infile_nameonly)[0]
 
-        if verbosity_level >= 2:
-                print("check_accelsearch_result:: infile_basename: ", fft_infile_basename)
-                print("check_accelsearch_result:: ACCEL_filename = ", ACCEL_filename)
-                print("check_accelsearch_result:: ACCEL_cand_filename", ACCEL_cand_filename)
-                print("check_accelsearch_result:: ACCEL_txtcand_filename = ", ACCEL_txtcand_filename)
-
         ACCEL_filename =  fft_infile.replace(".fft", "_ACCEL_%d" % (zmax))
         ACCEL_cand_filename =  fft_infile.replace(".fft", "_ACCEL_%d.cand" % (zmax))
         ACCEL_txtcand_filename =  fft_infile.replace(".fft", "_ACCEL_%d.txtcand" % (zmax))
 
+        if verbosity_level >= 2:
+                print("check_accelsearch_result:: fft_infile_basename: ", fft_infile_basename)
+                print("check_accelsearch_result:: ACCEL_filename = ", ACCEL_filename)
+                print("check_accelsearch_result:: ACCEL_cand_filename", ACCEL_cand_filename)
+                print("check_accelsearch_result:: ACCEL_txtcand_filename = ", ACCEL_txtcand_filename)
+
+        
         try:
-                if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0) and (os.path.getsize(ACCEL_txtcand_filename) > 0):
+                #if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0) and (os.path.getsize(ACCEL_txtcand_filename) > 0): # PRESTO-ZL currently produces 0-byte ACCEL_txtcand files - RE-ENABLE WHEN FIXED
+                if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0):
                         result_message = "check_accelsearch_result:: Files exist and their size is > 0! Skipping..."
                         check_result = True
                 else:
@@ -858,7 +868,7 @@ def check_accelsearch_result(fft_infile, zmax, verbosity_level=0):
                 result_message = "check_accelsearch_result:: OSError: It seems accelsearch has not been executed!"
                 check_result = False
 
-        if verbosity_level >= 1:
+        if verbosity_level >= 2:
                 print(result_message)
 
         return check_result
@@ -879,7 +889,8 @@ def check_jerksearch_result(fft_infile, zmax, wmax, verbosity_level=0):
         ACCEL_txtcand_filename =  fft_infile.replace(".fft", "_ACCEL_%d_JERK_%d.txtcand"  % (zmax, wmax))
 
         try:
-                if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0) and (os.path.getsize(ACCEL_txtcand_filename) > 0):
+                #if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0) and (os.path.getsize(ACCEL_txtcand_filename) > 0): # PRESTO-ZL currently produces 0-byte ACCEL_txtcand files - RE-ENABLE WHEN FIXED
+                if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0):
                         result_message = "check_jerksearch_result:: Files exist and their size is > 0! Skipping..."
                         check_result = True
                 else:
@@ -895,24 +906,26 @@ def check_jerksearch_result(fft_infile, zmax, wmax, verbosity_level=0):
         return check_result
 
 
-def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags="", dict_env= {}, verbosity_level=0, flag_LOG_append=1):
+def accelsearch(infile, work_dir, log_abspath, flag_use_cuda=0, numharm=8, zmax=0, other_flags="", dict_env= {}, verbosity_level=0, flag_LOG_append=1):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         inffile_empty = infile.replace(".fft", "_ACCEL_%d_empty" % (zmax))
-
-        cmd_accelsearch = "accelsearch %s -zmax %s -numharm %s %s" % (other_flags, zmax, numharm, infile)
-
+        if flag_use_cuda==1 and zmax > 0:
+                cmd_accelsearch = "accelsearch_cu %s -batchsize 1 -zmax %s -numharm %s %s" % (other_flags, zmax, numharm, infile)
+        else:
+                cmd_accelsearch = "accelsearch %s -zmax %s -numharm %s %s" % (other_flags, zmax, numharm, infile)
+                
         if verbosity_level >= 2:
                 print()
                 print("BEGIN ACCELSEARCH ----------------------------------------------------------------------")
 
                 print("accelsearch:: cmd_accelsearch: ", cmd_accelsearch)
                 print("accelsearch:: ENV: ", dict_env)
-                print("accelsearch:: check_accelsearch_result(infile, int(zmax)) :: %s" % (check_accelsearch_result(infile, int(zmax))))
+                print("accelsearch:: check_accelsearch_result(infile, int(zmax)) :: %s" % (check_accelsearch_result(infile, int(zmax), verbosity_level)))
                 print("accelsearch:: work_dir = %s" % (work_dir))
                 print("accelsearch:: infile = %s" % (infile))
 
-        if check_accelsearch_result(infile, int(zmax)) == False and check_accelsearch_result(inffile_empty, int(zmax)) == False:
+        if check_accelsearch_result(infile, int(zmax), verbosity_level) == False and check_accelsearch_result(inffile_empty, int(zmax), verbosity_level) == False:
                 if verbosity_level >= 2:
                         print("accelsearch:: running: %s" % (cmd_accelsearch))
                 execute_and_log(cmd_accelsearch, work_dir, log_abspath, dict_env, flag_LOG_append)
@@ -922,8 +935,9 @@ def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags=""
 
         if verbosity_level >= 2:
                 print("accelsearch:: NOW I CHECK THE RESULT OF THE EXECUTION!")
-
-        if check_accelsearch_result(infile, int(zmax)) == False:
+                print("Running check_accelsearch_result(%s, %s)" % (infile, int(zmax)))
+                
+        if check_accelsearch_result(infile, int(zmax), verbosity_level) == False:
                 if verbosity_level >= 2:
                         print("False! Then I create a _empty file!")
                 file_empty = open(inffile_empty, "w")
@@ -940,12 +954,16 @@ def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags=""
 
 
 
-def jerksearch(infile, work_dir, log_abspath, numharm=4, zmax=50, wmax=150, other_flags="", dict_env={}, verbosity_level=0, flag_LOG_append=1):
+def jerksearch(infile, work_dir, log_abspath, flag_use_cuda=0, numharm=4, zmax=50, wmax=150, other_flags="", dict_env={}, verbosity_level=0, flag_LOG_append=1):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         inffile_empty = infile.replace(".fft", "_ACCEL_%d_JERK_%d_empty" % (zmax, wmax))
         sys.stdout.flush()
-        cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (other_flags, zmax, wmax, numharm, infile)
+
+        if flag_use_cuda==1:
+                cmd_jerksearch = "accelsearch_cu %s -batchsize 1 -zmax %d -wmax %d -numharm %d %s" % (other_flags, zmax, wmax, numharm, infile)
+        else:
+                cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (other_flags, zmax, wmax, numharm, infile)
 
         if verbosity_level >= 2:
                 print()
@@ -953,7 +971,7 @@ def jerksearch(infile, work_dir, log_abspath, numharm=4, zmax=50, wmax=150, othe
 
                 print("jerksearch:: cmd_jerksearch: ", cmd_jerksearch)
                 print("jerksearch:: AND THIS IS THE ENV: ", dict_env)
-                print("jerksearch:: check_accelsearch_result(infile, int(zmax)) :: %s" % (check_accelsearch_result(infile, int(zmax))))
+                print("jerksearch:: check_accelsearch_result(infile, int(zmax)) :: %s" % (check_accelsearch_result(infile, int(zmax), verbosity_level)))
                 print("jerksearch:: work_dir = %s" % (work_dir))
                 print("jerksearch:: infile = %s" % (infile))
 
@@ -968,6 +986,7 @@ def jerksearch(infile, work_dir, log_abspath, numharm=4, zmax=50, wmax=150, othe
         if verbosity_level >= 2:
                 print("jerksearch:: NOW I CHECK THE RESULT OF THE EXECUTION!")
 
+                print("Running check_jerksearch_result(%s, %s, %s)" % (infile, zmax, wmax))
         if check_jerksearch_result(infile, zmax, wmax) == False:
                 if verbosity_level >= 2:
                         print("False! Then I create a _empty file!")
@@ -1173,7 +1192,7 @@ def singlepulse_search(work_dir, log_dir, LOG_basename, list_files_to_search, si
                 for k in range(len(list_singlepulse_search_commands)):
                         print("Queing single-pulse search command #%d: '%s'" % (k+1, list_singlepulse_search_commands[k]))
                         time.sleep(0.1)
-                        TP.apply_async(execute_and_log_in_thread_pool, (list_singlepulse_search_commands[k], log_dir, list_singlepulse_search_workdirs[k], k, N_commands, 1) )
+                        TP.apply_async(execute_and_log_in_thread_pool, (list_singlepulse_search_commands[k], log_dir, list_singlepulse_search_workdirs[k], dict_env, k, N_commands, 1) )
                 print("\n")
                 print("Running %d single-pulse search commands at once..." % (num_simultaneous_singlepulse_searches)); sys.stdout.flush()
                 TP.close()
@@ -1229,6 +1248,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                 print("\033[1m >> TIP:\033[0m Follow periodicity search with: \033[1mtail -f %s\033[0m" % (log_abspath))
 
         zapfile_nameonly = os.path.basename(zapfile)
+
 
         #########################################################################################################
         #                                     NON-PARALLELIZED JERK SEARCH
@@ -1300,7 +1320,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                                                                 if flag_use_cuda == 1:
                                                                         dict_env = copy.deepcopy(dict_env_zmax_any)
                                                                         gpu_id = random.choice(list_cuda_ids)
-                                                                        flag_cuda = " -cuda %d " % (gpu_id)
+                                                                        flag_cuda = ""
                                                                 else:
                                                                         dict_env = copy.deepcopy(dict_env_zmax_0)
                                                                         flag_cuda = ""
@@ -1313,7 +1333,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
 
                                                         accelsearch_flags = other_flags_accelsearch + flag_cuda  # + " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
 
-                                                        accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                                        accelsearch(fft_file, work_dir, log_abspath, flag_use_cuda=flag_use_cuda, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
                                                         tend_accelsearch = time.time()
                                                         time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
                                                         print("done in %.2f s!" % (time_taken_accelsearch_s))
@@ -1321,12 +1341,21 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                                                         ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
 
                                         if jerksearch_wmax > 0 and flag_jerk_search == 1:
+                                                if flag_use_cuda == 1:
+                                                        dict_env = copy.deepcopy(dict_env_zmax_any)
+                                                        gpu_id = random.choice(list_cuda_ids)
+                                                        flag_cuda = ""
+                                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing jerk search on GPU of %s with zmax=%d, wmax=%d, numharm=%d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
+                                                else:
+                                                        dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                        flag_cuda = ""
+                                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing jerk search on CPU of %s with zmax=%d, wmax=%d, numharm=%d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
+                                                        
                                                 tstart_jerksearch = time.time()
-                                                print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Doing jerk search of %s with zmax=%d, wmax=%d, numharm=%d..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
+                                                
                                                 sys.stdout.flush()
-                                                flag_cuda = ""
                                                 jerksearch_flags = other_flags_accelsearch + flag_cuda
-                                                jerksearch(fft_file, work_dir, log_abspath, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env_zmax_0, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                                jerksearch(fft_file, work_dir, log_abspath, flag_use_cuda=flag_use_cuda, numharm=jerksearch_numharm, zmax=jerksearch_zmax, wmax=jerksearch_wmax, other_flags=jerksearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
                                                 tend_jerksearch = time.time()
                                                 time_taken_jerksearch_s = tend_jerksearch - tstart_jerksearch
                                                 print("done in %.2f s!" % (time_taken_jerksearch_s))
@@ -1350,7 +1379,6 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
         # If we are doing a jerk search with multiple CPUs, the scheme will be different
         # We will first realfft, deredden and zap all the dat files, then search all the .fft files in parallel
         #########################################################################################################
-        
         elif num_simultaneous_jerksearches >= 2 and jerksearch_wmax > 0 and flag_jerk_search == 1:
                 list_jerksearch_commands = []
                 list_jerksearch_workdirs = []
@@ -1419,7 +1447,7 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                                                                 if flag_use_cuda == 1:
                                                                         dict_env = copy.deepcopy(dict_env_zmax_any)
                                                                         gpu_id = random.choice(list_cuda_ids)
-                                                                        flag_cuda = " -cuda %d " % (gpu_id)
+                                                                        flag_cuda = ""
                                                                 else:
                                                                         dict_env = copy.deepcopy(dict_env_zmax_0)
                                                                         flag_cuda = ""
@@ -1432,14 +1460,20 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
 
                                                         accelsearch_flags = other_flags_accelsearch + flag_cuda  # + " -flo %s -fhi %s" % (frequency_to_search_min, frequency_to_search_max)
 
-                                                        accelsearch(fft_file, work_dir, log_abspath, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
+                                                        accelsearch(fft_file, work_dir, log_abspath, flag_use_cuda=flag_use_cuda, numharm=numharm, zmax=z, other_flags=accelsearch_flags, dict_env=dict_env, verbosity_level=verbosity_level, flag_LOG_append=flag_LOG_append)
                                                         tend_accelsearch = time.time()
                                                         time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
                                                         print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
                                                         ACCEL_filename = fft_file.replace(".fft", "_ACCEL_%s" % (int(z)))
-
-                                        print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Will do jerk search of %s with zmax=%d, wmax=%d, numharm=%d at the end of the acceleration search of this chunk..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
-                                        cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (jerksearch_flags, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, fft_file)
+                                        if flag_use_cuda == 1:
+                                                dict_env = copy.deepcopy(dict_env_zmax_any)
+                                                print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Will do jerk search of %s with zmax=%d, wmax=%d, numharm=%d on GPU at the end of the acceleration search of this chunk..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
+                                                cmd_jerksearch = "accelsearch_cu %s -zmax %d -wmax %d -numharm %d %s" % (jerksearch_flags, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, fft_file)
+                                        else:
+                                                dict_env = copy.deepcopy(dict_env_zmax_0)
+                                                print("Seg '%s' %d/%d | ck %d/%d | DM %d/%d - Will do jerk search of %s with zmax=%d, wmax=%d, numharm=%d on CPU at the end of the acceleration search of this chunk..." % (segment_label, i_seg+1, N_seg, i_ck+1, N_ck, N_files_searched+i+1, N_DMs_to_search, zapped_fft_nameonly, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm), end=' ')
+                                                cmd_jerksearch = "accelsearch %s -zmax %d -wmax %d -numharm %d %s" % (jerksearch_flags, jerksearch_zmax, jerksearch_wmax, jerksearch_numharm, fft_file)
+                                        
                                         list_jerksearch_commands.append(cmd_jerksearch)
                                         list_jerksearch_workdirs.append(work_dir)
                                         print()
@@ -1449,11 +1483,17 @@ def periodicity_search_FFT(work_dir, log_dir, LOG_basename, zapfile, segment_lab
                 N_commands = len(list_jerksearch_commands)
                 print()
                 print("Now doing parallelized jerk search using %d CPUs..." % num_simultaneous_jerksearches);  sys.stdout.flush()
+
+                if flag_use_cuda == 1:
+                        dict_env_jerksearch_parallel = copy.deepcopy(dict_env_zmax_any)
+                else:
+                        dict_env_jerksearch_parallel = copy.deepcopy(dict_env_zmax_0)
+                        
                 print()
                 for k in range(len(list_jerksearch_commands)):
                         print("Queing jerk search command #%d: '%s'" % (k+1, list_jerksearch_commands[k]))
                         time.sleep(0.1)
-                        TP.apply_async(execute_and_log_in_thread_pool, (list_jerksearch_commands[k], log_dir, list_jerksearch_workdirs[k], k, N_commands, 1) )
+                        TP.apply_async(execute_and_log_in_thread_pool, (list_jerksearch_commands[k], log_dir, list_jerksearch_workdirs[k], dict_env_jerksearch_parallel, k, N_commands, 1) )
                 print("\n")
                 print("Running %d jerk search commands at once..." % (num_simultaneous_jerksearches)); sys.stdout.flush()
                 TP.close()
@@ -1539,7 +1579,7 @@ def make_zaplist(fft_infile, out_dir, log_dir, LOG_basename, common_birdies_file
                         print("Doing accelsearch...", end=' ')
                         sys.stdout.flush()
                         print(fft_infile, birds_numharm, 0, other_flags_accelsearch, presto_env, verbosity_level)
-                accelsearch(fft_infile, out_dir, log_abspath, birds_numharm, 0, other_flags_accelsearch, dict_env, verbosity_level)
+                accelsearch(fft_infile, out_dir, log_abspath, 0, birds_numharm, 0, other_flags_accelsearch, dict_env, verbosity_level)
                 if verbosity_level >= 2:
                         print("Done accelsearch!")
                 ACCEL_0_filename = fft_infile.replace(".fft", "_ACCEL_0")
@@ -1911,7 +1951,7 @@ def get_DDplan_scheme(infile, out_dir, log_dir, LOG_basename, loDM, highDM, DM_c
         return list_DD_schemes
 
 
-def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, nsubbands=0, num_simultaneous_prepsubbands=1, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0):
+def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, nsubbands=0, num_simultaneous_prepsubbands=1, other_flags="", flag_use_cuda=0, presto_env=os.environ['PRESTO'], verbosity_level=0):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         prepsubband_outfilename = "%s_%s_%s" % (infile_basename, segment_label, chunk_label)
@@ -1948,13 +1988,18 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                 print("ERROR: requested number of subbands is %d, which is not an integer divisor of the number of channels %d! " % (nsubbands, nchan))
                 exit()
 
+        if flag_use_cuda==1:
+                cmd_name = "prepsubband_cu"
+        else:
+                cmd_name = "prepsubband"
+                
         file_script_prepsubband = open(file_script_prepsubband_abspath, "w")
         for i in range(N_schemes):
                 flag_numout = ""
                 if i < N_schemes-1:
-                        cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs']    , list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                        cmd_prepsubband = "%s %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (cmd_name, other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs']    , list_DD_schemes[i]['downsamp'], nsubbands, infile)
                 elif i == N_schemes-1:
-                        cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                        cmd_prepsubband = "%s %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (cmd_name, other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
                 file_script_prepsubband.write("%s\n" % cmd_prepsubband)
 
         file_script_prepsubband.close()
@@ -1985,10 +2030,10 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
 
                         if i < N_schemes-1:
                                 str_parentesis = ")"
-                                cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs']    , list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                                cmd_prepsubband = "%s %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (cmd_name, other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs']    , list_DD_schemes[i]['downsamp'], nsubbands, infile)
                         elif i == N_schemes-1:
                                 str_parentesis = "]"
-                                cmd_prepsubband = "prepsubband %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
+                                cmd_prepsubband = "%s %s %s -o %s %s %s -lodm %s -dmstep %s -numdms %s -downsamp %s -nsub %s %s" % (cmd_name, other_flags, flag_numout, prepsubband_outfilename, string_ignorechan, string_mask, list_DD_schemes[i]['loDM'], list_DD_schemes[i]['dDM'], list_DD_schemes[i]['num_DMs'] + 1, list_DD_schemes[i]['downsamp'], nsubbands, infile)
 
                         if check_prepsubband_result_single_scheme(out_dir, list_DD_schemes[i], verbosity_level) == False:
                                 if num_simultaneous_prepsubbands == 1 or N_schemes == 1:
@@ -1997,7 +2042,7 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                                         if verbosity_level >= 2:
                                                 print("dedisperse:: %d) RUNNING: %s" % (i, cmd_prepsubband))
 
-                                        execute_and_log("which prepsubband", out_dir, log_abspath, dict_env, 1)
+                                        execute_and_log("which %s" % cmd_name, out_dir, log_abspath, dict_env, 1)
                                         execute_and_log(cmd_prepsubband, out_dir, log_abspath, dict_env, 1)
                                         if check_prepsubband_result_single_scheme(out_dir, list_DD_schemes[i], verbosity_level) == True:
                                                 N_prepsubband_schemes_done = N_prepsubband_schemes_done + 1
@@ -2024,7 +2069,7 @@ def dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_labe
                 for k in range(len(list_prepsubband_commands)):
                         print("Queing prepsubband command #%d: '%s'" % (k+1, list_prepsubband_commands[k]))
                         time.sleep(0.1)
-                        TP.apply_async(execute_and_log_in_thread_pool, (list_prepsubband_commands[k], log_dir, list_prepsubband_workdirs[k], k, N_commands, 1) )
+                        TP.apply_async(execute_and_log_in_thread_pool, (list_prepsubband_commands[k], log_dir, list_prepsubband_workdirs[k], dict_env,  k, N_commands, 1) )
                 TP.close()
                 TP.join()
                 print()
@@ -2112,7 +2157,7 @@ def dedisperse_rednoise_and_periodicity_search_FFT(infile, out_dir, root_workdir
 
         if dict_flag_steps['flag_step_dedisperse'] == 1:
                 if segment_label == "full":
-                        dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands, num_simultaneous_prepsubbands, other_flags_prepsubband, presto_env_prepsubband, verbosity_level)
+                        dedisperse(infile, out_dir, log_dir, LOG_basename, segment_label, chunk_label, Nsamples, ignorechan_list, mask_file, list_DD_schemes, nchan, subbands, num_simultaneous_prepsubbands, other_flags_prepsubband, flag_use_cuda, presto_env_prepsubband, verbosity_level)
                 else:
 
                         search_string = "%s/03_DEDISPERSION/%s/full/ck00/*.dat" % (root_workdir, infile_basename) #List of datfiles to split
@@ -2145,7 +2190,7 @@ class SurveyConfiguration(object):
                 self.config_filename = config_filename
                 self.list_datafiles = []
 
-                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'DATA_TYPE', 'ROOT_WORKDIR', 'PRESTO', 'PRESTO_GPU', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'RFIFIND_TIME', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'ZAP_ISOLATED_PULSARS_FROM_FFTS', 'ZAP_ISOLATED_PULSARS_MAX_HARM', 'FLAG_ACCELERATION_SEARCH', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'FLAG_JERK_SEARCH', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'ACCELSEARCH_JERK_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_SINGLEPULSE_SEARCH', 'SINGLEPULSE_SEARCH_FLAGS', 'USE_CUDA', 'CUDA_IDS', 'NUM_SIMULTANEOUS_JERKSEARCHES', 'NUM_SIMULTANEOUS_PREPFOLDS', 'NUM_SIMULTANEOUS_PREPSUBBANDS', 'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING', 'STEP_SINGLEPULSE_SEARCH']
+                self.list_survey_configuration_ordered_params = ['SEARCH_LABEL', 'DATA_TYPE', 'ROOT_WORKDIR', 'PRESTO', 'PRESTO_ZL', 'DM_MIN', 'DM_MAX', 'DM_COHERENT_DEDISPERSION', 'N_SUBBANDS', 'PERIOD_TO_SEARCH_MIN', 'PERIOD_TO_SEARCH_MAX', 'LIST_SEGMENTS', 'RFIFIND_TIME', 'RFIFIND_CHANS_TO_ZAP', 'RFIFIND_TIME_INTERVALS_TO_ZAP', 'IGNORECHAN_LIST', 'ZAP_ISOLATED_PULSARS_FROM_FFTS', 'ZAP_ISOLATED_PULSARS_MAX_HARM', 'FLAG_ACCELERATION_SEARCH', 'ACCELSEARCH_LIST_ZMAX', 'ACCELSEARCH_NUMHARM', 'FLAG_JERK_SEARCH', 'JERKSEARCH_ZMAX', 'JERKSEARCH_WMAX', 'JERKSEARCH_NUMHARM', 'SIFTING_FLAG_REMOVE_DUPLICATES', 'SIFTING_FLAG_REMOVE_DM_PROBLEMS', 'SIFTING_FLAG_REMOVE_HARMONICS', 'SIFTING_MINIMUM_NUM_DMS', 'SIFTING_MINIMUM_DM', 'SIFTING_SIGMA_THRESHOLD', 'FLAG_FOLD_KNOWN_PULSARS', 'FLAG_FOLD_TIMESERIES', 'FLAG_FOLD_RAWDATA', 'RFIFIND_FLAGS', 'PREPDATA_FLAGS', 'PREPSUBBAND_FLAGS', 'REALFFT_FLAGS', 'REDNOISE_FLAGS', 'ACCELSEARCH_FLAGS', 'ACCELSEARCH_GPU_FLAGS', 'ACCELSEARCH_JERK_FLAGS', 'PREPFOLD_FLAGS', 'FLAG_SINGLEPULSE_SEARCH', 'SINGLEPULSE_SEARCH_FLAGS', 'USE_CUDA', 'CUDA_IDS', 'NUM_SIMULTANEOUS_JERKSEARCHES', 'NUM_SIMULTANEOUS_PREPFOLDS', 'NUM_SIMULTANEOUS_PREPSUBBANDS', 'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND', 'FAST_BUFFER_DIR', 'FLAG_KEEP_DATA_IN_BUFFER_DIR', 'FLAG_REMOVE_FFTFILES', 'FLAG_REMOVE_DATFILES_OF_SEGMENTS', 'STEP_RFIFIND', 'STEP_ZAPLIST', 'STEP_DEDISPERSE', 'STEP_REALFFT', 'STEP_PERIODICITY_SEARCH', 'STEP_SIFTING', 'STEP_FOLDING', 'STEP_SINGLEPULSE_SEARCH']
 
                 self.dict_survey_configuration = {}
 
@@ -2173,9 +2218,9 @@ class SurveyConfiguration(object):
                                 if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
                                         self.presto_env                       = self.dict_survey_configuration[key]
 
-                        elif key == "PRESTO_GPU":
+                        elif key == "PRESTO_ZL":
                                 if check_presto_path(presto_path=self.dict_survey_configuration[key], key=key) == True:
-                                        self.presto_gpu_env                   = self.dict_survey_configuration[key]
+                                        self.presto_zl_env                   = self.dict_survey_configuration[key]
                         elif key == "DM_MIN":                               self.dm_min                                = self.dict_survey_configuration[key]
                         elif key == "DM_MAX":                               self.dm_max                                = self.dict_survey_configuration[key]
                         elif key == "DM_COHERENT_DEDISPERSION":             self.dm_coherent_dedispersion              = self.dict_survey_configuration[key]
@@ -2268,8 +2313,8 @@ class SurveyConfiguration(object):
 
                 self.dict_chunks = {}      # {'filename': {'20m':   [0,1,2]}}
                 self.dict_search_structure = {}
-                if self.presto_gpu_env == "":
-                        self.presto_gpu_env = self.presto_env
+                if self.presto_zl_env == "":
+                        self.presto_zl_env = self.presto_env
 
         def get_list_datafiles(self, list_datafiles_filename):
                 list_datafiles_file = open(list_datafiles_filename, "r" )
@@ -2318,27 +2363,24 @@ def init_default(observation_filename):
         except:             presto_path = "*** PRESTO environment variable undefined ***" 
 
         try:
-                presto_gpu_path = os.environ['PRESTO2_ON_GPU']
+                presto_zl_path = os.environ['PRESTO_ZL']
                 use_cuda = '1'
         except:
                 try:
-                        presto_gpu_path = os.environ['PRESTO_ON_GPU']
-                        use_cuda = '1'
-                except:
-                        try:
-                                presto_gpu_path = os.environ['PRESTO']
-                                use_cuda = '0'
-                                print("WARNING: PRESTO2_ON_GPU / PRESTO_ON_GPU environment variables undefined - GPU acceleration will not be used!")
+                        presto_zl_path = os.environ['PRESTO']
+                        use_cuda = '0'
+                        print("WARNING: PRESTO_ZL environment variables undefined - GPU acceleration will not be used!")
 
-                        except:
-                                print("ERROR: no PRESTO/PRESTO_ON_GPU environment variable seems to be defined!")
-                                exit()
+                except:
+                        print("ERROR: no PRESTO/PRESTO_ZL environment variable seems to be defined!")
+                        print("Please make sure that the PRESTO environment variable is correctly defined.")
+                        exit()
 
         dict_survey_configuration_default_values = {'SEARCH_LABEL':                          "%s                # Label of this search project" % os.path.basename(os.getcwd()),
                                                     'DATA_TYPE':                             "%-18s            # Options: filterbank, psrfits" % (default_file_format),
                                                     'ROOT_WORKDIR':                          "(cwd)            # Path of the root working directory. Options: /absolute/path or '(cwd)' for current working directory",
                                                     'PRESTO':                                "%s               # Path of the main PRESTO installation" % presto_path,
-                                                    'PRESTO_GPU':                            "%s               # Path of the PRESTO_ON_GPU installation (if present) " % presto_gpu_path,
+                                                    'PRESTO_ZL':                             "%s               # Path of the PRESTO_ZL installation (if present) for GGPU-acceleration " % presto_zl_path,
                                                     'DM_MIN':                                "2.0                    # Minimum DM to search",
                                                     'DM_MAX':                                "100.0                  # Maximum DM to search",
                                                     'DM_COHERENT_DEDISPERSION':              "0                      # DM value of possible coherent dedispersion (CDD) (0 = NO CDD)",
@@ -2370,18 +2412,18 @@ def init_default(observation_filename):
                                                     'FLAG_FOLD_RAWDATA':                     "1                      # Fold the candidates using raw data file (slow, but has all the information)? (1=yes, 0=no)",
                                                     'RFIFIND_FLAGS':                         "\"\"                     # Any additional options to give to RFIFIND",
                                                     'PREPDATA_FLAGS':                        "\"\"                     # Any additional options to give to PREPDATA",
-                                                    'PREPSUBBAND_FLAGS':                     "\"-ncpus 4\"             # Any additional options to give to PREPSUBBAND",
+                                                    'PREPSUBBAND_FLAGS':                     "\"\"             # Any additional options to give to PREPSUBBAND",
                                                     'REALFFT_FLAGS':                         "\"\"                     # Any additional options to give to REALFFT",
                                                     'REDNOISE_FLAGS':                        "\"\"                     # Any additional options to give to REDNOISE",
                                                     'ACCELSEARCH_FLAGS':                     "\"\"                     # Any additional options to give to ACCELSEARCH when doing acceleration search",
-                                                    'ACCELSEARCH_GPU_FLAGS':                 "\"\"                     # Any additional options to give to ACCELSEARCH when doing acceleration search with PRESTO_ON_GPU",
+                                                    'ACCELSEARCH_GPU_FLAGS':                 "\"\"                     # Any additional options to give to ACCELSEARCH when doing acceleration search with PRESTO_ZL",
                                                     'ACCELSEARCH_JERK_FLAGS':                "\"\"                     # Any additional options to give to ACCELSEARCH when doing jerk search",
                                                     'PREPFOLD_FLAGS':                        "\"-ncpus %-3d -n 64\"     # Any additional options to give to PREPFOLD" % (multiprocessing.cpu_count()/4),
                                                     'FLAG_SINGLEPULSE_SEARCH':               "1                      # Perform single-pulse search? (1=yes, 0=no)",
                                                     'SINGLEPULSE_SEARCH_FLAGS':              "\"\"                   # Any additional options to give to SINGLE_PULSE_SEARCH.py when doing single-pulse search",
                                                     'USE_CUDA':                              "%s                      # Use GPU-acceleration? (1=yes, 0=no)" % use_cuda,
                                                     'CUDA_IDS':                              "0                      # Comma-separated ids of NVIDIA GPUs to use (e.g. \"0,1,2,3\" - check with 'nvidia-smi')",
-                                                    'NUM_SIMULTANEOUS_JERKSEARCHES':         "%-4d                   # Number of jerk search instances to run at once" % (multiprocessing.cpu_count()),
+                                                    'NUM_SIMULTANEOUS_JERKSEARCHES':         "1                      # Number of jerk search instances to run at once",
                                                     'NUM_SIMULTANEOUS_PREPFOLDS':            "4                      # Max number of prepfold instances to run at once",
                                                     'NUM_SIMULTANEOUS_PREPSUBBANDS':         "%-4d                   # Maximum number of prepsubband instances to run at once" % (multiprocessing.cpu_count()/4),
                                                     'MAX_SIMULTANEOUS_DMS_PER_PREPSUBBAND':  "1000                   # Number of simultaneous DM values processed at once by prepsubband (max 1000) ",
@@ -2416,7 +2458,7 @@ def init_default(observation_filename):
                 f.write("%-40s %s\n" % ('DATA_TYPE', dict_survey_configuration_default_values['DATA_TYPE']))
                 f.write("%-40s %s\n" % ('ROOT_WORKDIR', dict_survey_configuration_default_values['ROOT_WORKDIR']))
                 f.write("%-40s %s\n" % ('PRESTO', dict_survey_configuration_default_values['PRESTO']))
-                f.write("%-40s %s\n" % ('PRESTO_GPU', dict_survey_configuration_default_values['PRESTO_GPU']))
+                f.write("%-40s %s\n" % ('PRESTO_ZL', dict_survey_configuration_default_values['PRESTO_ZL']))
                 f.write("\n")
                 f.write("#===============================================================\n")
                 f.write("# Core search parameters\n")
@@ -3251,7 +3293,7 @@ if config.flag_step_dedisperse == 1:
                                         print("config.list_cuda_ids = ", config.list_cuda_ids)
                                         print()
                                         print("config.presto_env = ", config.presto_env)
-                                        print("config.presto_gpu_env = ", config.presto_gpu_env)
+                                        print("config.presto_zl_env = ", config.presto_zl_env)
                                         print("**********************")
 
                                 dict_flag_steps = {'flag_step_dedisperse': config.flag_step_dedisperse, 'flag_step_realfft': config.flag_step_realfft, 'flag_step_periodicity_search': config.flag_step_periodicity_search}
@@ -3292,7 +3334,7 @@ if config.flag_step_dedisperse == 1:
                                                                                config.flag_remove_fftfiles,
                                                                                config.flag_remove_datfiles_of_segments,
                                                                                config.presto_env,
-                                                                               config.presto_gpu_env,
+                                                                               config.presto_zl_env,
                                                                                verbosity_level,
                                                                                dict_flag_steps)
                                 
