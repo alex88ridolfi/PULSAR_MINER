@@ -7,8 +7,12 @@ import glob
 import numpy as np
 import subprocess
 from presto import psrfits, filterbank
-
-
+flag_json_found=1
+try:
+       import json
+except:
+       flag_json_found=0
+       
 LIGHT_SPEED = 2.99792458e10  # Speed of Light in cgs
 
 
@@ -175,19 +179,35 @@ max_dist_arcsec = -1
 dest = ""
 
 flag_make_rsync_script = 0
+flag_use_beams = 0
+flag_use_meta  = 0
 
 # SHELL ARGUMENTS
 if (len(sys.argv) == 1):
-       print(("USAGE: %s -beams \"*.fil\" -coord \"RA,DEC\" {-n N | -max_dist_arcsec 60} [-make_rsync_script \"dest\"]" % (os.path.basename(sys.argv[0]))))
+       print(("USAGE: %s {-beams \"*.fil\" | -meta \"*.meta\"} -coord \"RA,DEC\" {-n N | -max_dist_arcsec 60} [-make_rsync_script \"dest\"]" % (os.path.basename(sys.argv[0]))))
        exit()
 else:
        for j in range(1, len(sys.argv)):
               if (sys.argv[j] == "-beams"):
+                     flag_use_beams = 1
                      string_beams = sys.argv[j+1]
                      if ("*" in string_beams) or ("?" in string_beams):
                             list_beams = sorted(glob.glob(string_beams.strip("\"")))
                      else:
                             list_beams = string_beams.split(",")
+                     N_beams = len(list_beams)
+
+              if (sys.argv[j] == "-meta"):
+                     flag_use_meta=1
+                     if flag_json_found==1:
+                            string_metafiles = sys.argv[j+1]
+                            if ("*" in string_metafiles) or ("?" in string_metafiles):
+                                   list_metafiles = sorted(glob.glob(string_metafiles.strip("\"")))
+                            else:
+                                   list_metafiles = string_metafiles.split(",")
+                            N_metafiles = len(list_metafiles)
+                     else:
+                            print("ERROR: Could not import python's json library. Make sure to have it installed if you want to use *.meta files.")
 
               elif (sys.argv[j] == "-coord"):
                      RA2, DEC2 = sys.argv[j+1].replace(" ", "").split(",")
@@ -203,44 +223,53 @@ else:
                      dest = sys.argv[j+1]
 
 
-N_beams = len(list_beams)
+
+
 
 list_beams_dicts = []
 list_files_to_rsync = []
 
-for i in range(N_beams):
-       rawfilename = list_beams[i]
+if flag_use_meta==1:
+       
+       for k in range(N_metafiles):
+              meta_file = list_metafiles[k]
+              meta_file_nameonly = os.path.basename(meta_file)
+              with open(meta_file) as f:
+                     data = json.load(f)
 
-       if rawfilename.endswith(".fil"):
-              rawfile = Observation(rawfilename, data_type="filterbank")
-       elif rawfilename.endswith(".fits") or rawfilename.endswith(".sf"):
-              rawfile = Observation(rawfilename, data_type="psrfits")
+              dict_beams = data['beams']
+              #print(dict_beams)
+              for key in dict_beams.keys():
+                     rawfilename = "%s - %s" % (meta_file_nameonly, key)
+                     RA1, DEC1 = dict_beams[key].replace(" ", "").split(",")[-2:]
+                     distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
+                     distance_arcmin = distance_deg*60.
+                     distance_arcsec = distance_deg*60*60
+
+                     
+                     list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec})
+                     list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
+
+
+if flag_use_beams == 1:
+       for i in range(N_beams):
+              rawfilename = list_beams[i]
+
+              if rawfilename.endswith(".fil"):
+                     rawfile = Observation(rawfilename, data_type="filterbank")
+              elif rawfilename.endswith(".fits") or rawfilename.endswith(".sf"):
+                     rawfile = Observation(rawfilename, data_type="psrfits")
               
-       RA1 = rawfile.RAJ_str
-       DEC1 = rawfile.DECJ_str
+              RA1 = rawfile.RAJ_str
+              DEC1 = rawfile.DECJ_str
 
-       # print "File: %20s  |  POS1: %15s %15s  -- POS2: %15s %15s" % (rawfilename, RA1, DEC1, RA2, DEC2),
-       
-       # print
-       # print "%10s:    %-15s" % ("RA2", RA2)
-       # print "%10s:   %-15s" % ("DEC2", DEC2)
-       # print
-
-       distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
-       distance_arcmin = distance_deg*60.
-       distance_arcsec = distance_deg*60*60
-       
-       # print "----> Distance: %.8f deg" % (distance_deg),
-
-       # if distance_deg < 1.0:
-              # print " = %.6f arcmin" % (distance_arcmin),
-       # if distance_deg < 1./60:
-       #        print " = %.6f arcsec" % (distance_arcsec),
-       # print
+              distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
+              distance_arcmin = distance_deg*60.
+              distance_arcsec = distance_deg*60*60
         
-       list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec})
+              list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec})
 
-       list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
+              list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
 
 if N_top_closest_beams == -1:
        N_top_closest_beams = len(list_beams_dicts)

@@ -1,6 +1,9 @@
-CURRENT_VERSION: 20250120.0 (20Jan2025)
+CURRENT_VERSION: 20250227.0 (27Feb2025)
 
 ******************************
+Version 2.0-beta  (27Feb2025)
+- "pm_get_closest_beams" now also accepts apuse.meta files as input
+
 Version 2.0-beta  (27Jul2024)
 - Added single-pulse search (via PRESTO)
 
