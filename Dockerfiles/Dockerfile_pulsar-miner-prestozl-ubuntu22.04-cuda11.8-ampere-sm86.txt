@@ -1,5 +1,5 @@
 # Build with:
-# docker build --no-cache -t "alex88ridolfi/pulsar-miner-2.0-prestozl-22feb2025:latest" - < Dockerfile_pulsar-miner-prestozl-ubuntu22.04-cuda11.8-ampere-sm86.txt
+# docker build --no-cache -t "alex88ridolfi/pulsar-miner-2.0-prestozl:latest" - < Dockerfile_pulsar-miner-prestozl-ubuntu22.04-cuda11.8-ampere-sm86.txt
 
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
@@ -22,6 +22,16 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python3.10 1
 
 RUN python3 -m pip install numpy==1.23.5
+
+#######################
+# PULSAR_MINER
+#######################
+
+WORKDIR ${PSRHOME}
+RUN git clone -b PrestoZL https://github.com/alex88ridolfi/PULSAR_MINER.git
+ENV PATH="${PSRHOME}/PULSAR_MINER:${PATH}"
+
+
 
 #######################
 # TEMPO
@@ -72,18 +82,6 @@ RUN make makewisdom && \
     make 
 
 ENV PATH=${PATH}
-
-#######################
-# PULSAR_MINER
-#######################
-
-WORKDIR ${PSRHOME}
-
-RUN git clone https://github.com/alex88ridolfi/PULSAR_MINER.git
-RUN cd PULSAR_MINER
-RUN git checkout PrestoZL
-ENV PATH="${PSRHOME}/PULSAR_MINER:${PATH}"
-
 
 #######################
 # PRESTO
