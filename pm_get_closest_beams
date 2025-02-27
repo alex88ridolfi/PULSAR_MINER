@@ -239,16 +239,16 @@ if flag_use_meta==1:
 
               dict_beams = data['beams']
               #print(dict_beams)
-              for key in dict_beams.keys():
+              for key in [x for x in dict_beams.keys() if not "ifbf" in x]:
                      rawfilename = "%s - %s" % (meta_file_nameonly, key)
-                     RA1, DEC1 = dict_beams[key].replace(" ", "").split(",")[-2:]
-                     distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
-                     distance_arcmin = distance_deg*60.
-                     distance_arcsec = distance_deg*60*60
-
-                     
-                     list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec})
-                     list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
+                     beam_value = dict_beams[key]
+                     if not "noapsuse" in beam_value:
+                            RA1, DEC1 = dict_beams[key].replace(" ", "").split(",")[-2:]
+                            distance_deg = calculate_angular_distance_in_rad(RA1, DEC1, RA2, DEC2) * 180./np.pi
+                            distance_arcmin = distance_deg*60.
+                            distance_arcsec = distance_deg*60*60
+                            list_beams_dicts.append({'rawfilename': rawfilename, 'distance_arcsec': distance_arcsec})
+                            list_beams_dicts = sorted(list_beams_dicts, key=lambda k: k['distance_arcsec'], reverse=False)
 
 
 if flag_use_beams == 1:
