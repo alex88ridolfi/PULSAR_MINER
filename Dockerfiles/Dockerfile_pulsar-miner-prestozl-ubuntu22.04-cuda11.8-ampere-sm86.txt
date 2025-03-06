@@ -71,7 +71,7 @@ ENV PGPLOT_DIR="/usr/lib/pgplot5" \
     PGPLOT_DEV="/xs"
 
 ENV PRESTO="/software/PrestoZL"
-ENV PRESTO2_ON_GPU="/software/PrestoZL"
+ENV PRESTO_ZL="/software/PrestoZL"
 ENV PATH="${PRESTO}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${PRESTO}/lib:${LD_LIBRARY_PATH}"
 

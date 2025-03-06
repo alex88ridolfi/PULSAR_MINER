@@ -30,9 +30,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "2.0 (22Feb2025)"
-string_version = "22Feb2025"
-number_version = 20250222.0
+string_version_full = "2.0 (06Mar2025)"
+string_version = "06Mar2025"
+number_version = 20250306.0
 
 class colors:
     HEADER = '\033[95m'
@@ -2380,7 +2380,7 @@ def init_default(observation_filename):
                                                     'DATA_TYPE':                             "%-18s            # Options: filterbank, psrfits" % (default_file_format),
                                                     'ROOT_WORKDIR':                          "(cwd)            # Path of the root working directory. Options: /absolute/path or '(cwd)' for current working directory",
                                                     'PRESTO':                                "%s               # Path of the main PRESTO installation" % presto_path,
-                                                    'PRESTO_ZL':                             "%s               # Path of the PRESTO_ZL installation (if present) for GGPU-acceleration " % presto_zl_path,
+                                                    'PRESTO_ZL':                             "%s               # Path of the PRESTO_ZL installation (if present) for GPU-acceleration " % presto_zl_path,
                                                     'DM_MIN':                                "2.0                    # Minimum DM to search",
                                                     'DM_MAX':                                "100.0                  # Maximum DM to search",
                                                     'DM_COHERENT_DEDISPERSION':              "0                      # DM value of possible coherent dedispersion (CDD) (0 = NO CDD)",
