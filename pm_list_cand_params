@@ -13,6 +13,17 @@ def calculate_acceleration_in_cm_s2_from_F0_and_F1(P0_s, Pdot):
 
        return acc_cm_s2
 
+def calculate_acceleration_in_cm_s2_from_F0_and_F1_with_err(P0_s, Pdot, P0_s_err, Pdot_err):
+       acc_cm_s2 = LIGHT_SPEED * Pdot/P0_s
+
+       # Delta acc   = sqrt[  (dacc/dP * Delta_P  )**2    + (dacc/dPdot * Delta_Pdot)**2     ]
+       # dacc/dP     = d/dP    ( c * Pdot* P^-1 ) = -C * Pdot * P^-2
+       # dacc/dPdot  = d/dPdot ( c * Pdot* P^-1 ) = C * P^-1
+
+       acc_cm_s2_err = np.sqrt(   ( -LIGHT_SPEED * Pdot *(P0_s**(-2) ) * P0_s_err )**2   + ( (LIGHT_SPEED * (P0_s**(-1)))  *Pdot_err)**2 )
+       
+       return acc_cm_s2, acc_cm_s2_err
+
 
 def import_bestprof(infile):
        file_bestprof = open(infile, "r")
@@ -22,11 +33,11 @@ def import_bestprof(infile):
               if line.startswith("# "):
                      split_line = [x.strip() for x in line[2:].split("=")]
 
-                     if (split_line[0] == "P_topo (ms)") or (split_line[0] == "P_bary (ms)"):
-                            try:
-                                   split_line[1] = np.float64(split_line[1].split("+/-")[0].strip())
-                            except:
-                                   pass
+                     #if (split_line[0] == "P_topo (ms)") or (split_line[0] == "P_bary (ms)"):
+                     #       try:
+                     #              split_line[1] = np.float64(split_line[1].split("+/-")[0].strip())
+                     #       except:
+                     #              pass
 
                      try:
                             dict_bestprof[split_line[0] ] = split_line[1]
@@ -38,8 +49,9 @@ def import_bestprof(infile):
 
 # ARGOMENTI DA SHELL
 flag_use_tabs = 0
+flag_show_err = 0
 if (len(sys.argv) == 1):
-       print("USAGE: %s -bestprof \"GOOD*.bestprof\" -tab_spacing " % (os.path.basename(sys.argv[0])))
+       print("USAGE: %s -bestprof \"GOOD*.bestprof\" [-tab_spacing] [-show_err] " % (os.path.basename(sys.argv[0])))
        exit()
 else:
        for j in range(1, len(sys.argv)):
@@ -52,17 +64,22 @@ else:
 
               elif (sys.argv[j] == "-tab_spacing"):
                      flag_use_tabs = 1
+              elif (sys.argv[j] == "-show_err"):
+                     flag_show_err = 1
+
 
 N_bestprof = len(list_bestprof)
-
-
-print("%90s %20s %20s %14s %15s %15s %15s %10s %12s" % ("File name", "Epoch_bary", "P_bary (ms)", "P_dot", "P_ddot", "DM (pc cm-3)", "Acc (m/s^2)", "zmax", "Length (s)"))
+if flag_show_err == 0:
+       print("%-90s %20s %20s %14s %15s %15s %15s %10s %12s" % ("File name", "Epoch_bary", "P_bary (ms)", "P_dot", "P_ddot", "DM (pc cm-3)", "Acc (m/s^2)", "zmax", "Length (s)"))
+elif flag_show_err == 1:
+       print("%-90s %20s %20s %12s %20s %12s %15s %12s %14s %15s %15s %10s %12s" % ("File name", "Epoch_bary", "P_bary (ms)", "P_bary_err", "P_dot", "P_dot_err", "P_ddot",  "P_ddot_err", "DM (pc cm-3)", "Acc (m/s^2)", "Acc_err(m/s^2)", "zmax", "Length (s)"))
+       
 for k in range(N_bestprof):
-
        bestprof_filename = list_bestprof[k]
        dict_bestprof = import_bestprof(bestprof_filename)
 
-       P_bary_ms = np.float64(dict_bestprof['P_bary (ms)'])
+       P_bary_ms = np.float64(dict_bestprof['P_bary (ms)'].split("+/-")[0])
+       P_bary_ms_err = np.float64(dict_bestprof['P_bary (ms)'].split("+/-")[1])
        P_dot = np.float64(dict_bestprof["P'_bary (s/s)"].split("+/-")[0])
        P_dot_err = np.float64(dict_bestprof["P'_bary (s/s)"].split("+/-")[1])
        P_ddot = np.float64(dict_bestprof["P''_bary (s/s^2)"].split("+/-")[0])
@@ -83,13 +100,29 @@ for k in range(N_bestprof):
               zmax = -1
 
 
+       
+       """
        if np.fabs(P_dot / P_dot_err) < 3 :
               P_dot = 0
        if np.fabs(P_ddot / P_ddot_err) < 3 :
-              P_ddot = 0
-              
+              P_ddot = 0              
        accel_ms2 = calculate_acceleration_in_cm_s2_from_F0_and_F1(P_bary_ms / 1000, P_dot)/100.
-       if flag_use_tabs == 1:
-              print("%-90s %20.14f %20.15f %15.3e %14.3e %15.3f %15.3f %10d %12d"   % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, P_ddot, DM, accel_ms2, zmax, chunk_length_s))
-       else:
-              print("%s %.15f %.15f  %.3e %.3e %.3f %.3f %d %d"              % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, P_ddot, DM, accel_ms2, zmax, chunk_length_s))
+       """
+       
+       accel_cms2, accel_cms2_err =  calculate_acceleration_in_cm_s2_from_F0_and_F1_with_err(P_bary_ms / 1000, P_dot, P_bary_ms_err, P_dot_err)
+       accel_ms2,  accel_ms2_err  =  accel_cms2/100., accel_cms2_err/100.
+
+       #WITHOUT UNCERTAINTIES
+       if flag_show_err == 0:
+              
+              if flag_use_tabs == 1:
+                     print("%-90s %20.14f %20.14f %15.3e %.3e %15.3f %15.3f %10d %12d"   % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, P_ddot, DM, accel_ms2, zmax, chunk_length_s))
+              else:
+                     print("%s %.14f %.4e %.3e %.3e %.3f %.5f %d %d"              % (bestprof_filename, Epoch_bary, P_bary_ms, P_dot, P_ddot, DM, accel_ms2, zmax, chunk_length_s))
+
+       #WITH UNCERTAINTIES
+       elif flag_show_err == 1:
+              if flag_use_tabs == 1:
+                     print("%-90s %20.14f %20.14f %12.4e %20.15f %12.4e %15.3e %12.3e %14.3f %15.3f %15.5f %10d %12d"   % (bestprof_filename, Epoch_bary, P_bary_ms, P_bary_ms_err, P_dot, P_dot_err, P_ddot, P_ddot_err, DM, accel_ms2, accel_ms2_err, zmax, chunk_length_s))
+              else:
+                     print("%s %.14f %.4e %.4e %.3e %.3e %.3e %.3e %.3f %.5f %.5f %d %d"  % (bestprof_filename, Epoch_bary, P_bary_ms, P_bary_ms_err, P_dot, P_dot_err, P_ddot, P_ddot_err, DM, accel_ms2, accel_ms2_err, zmax, chunk_length_s))
